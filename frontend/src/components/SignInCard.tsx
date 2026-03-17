@@ -180,7 +180,7 @@ export default function SignInCard() {
               mb: 0.7,
             }}
           >
-            Adresse e-mail
+             Nom d'utilisateur ou courriel
           </FormLabel>
           <TextField
             error={emailError}
@@ -356,8 +356,7 @@ export default function SignInCard() {
             fontSize: '0.95rem',
             textTransform: 'none',
             letterSpacing: 0.3,
-            bgcolor: '#1565C0',
-            boxShadow: '0 4px 14px rgba(21, 101, 192, 0.4)',
+            bgcolor: '#2352DE',
             transition: 'all 0.2s ease',
             '&:hover': {
               bgcolor: '#0D47A1',
