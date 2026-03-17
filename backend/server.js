@@ -9,6 +9,7 @@ dotenv.config();
 const app = express()
 const port = 4000
 
+// servir les fichiers static
 app.use(cors());
 app.use(express.static('public'))
 
