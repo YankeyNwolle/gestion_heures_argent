@@ -30,7 +30,7 @@ export function SitemarkIcon() {
         Heures
       </text>
       <text x="46" y="30" fontFamily="Inter, sans-serif" fontSize="9" fontWeight="400" fill="#64748B" letterSpacing="1">
-        ENSEIGNEMENT SUPÉRIEUR
+        ENSEIGNEMENT SUP
       </text>
     </SvgIcon>
   );
