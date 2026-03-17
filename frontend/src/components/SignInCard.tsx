@@ -388,38 +388,7 @@ export default function SignInCard() {
 
       {/* Boutons sociaux */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Button
-          fullWidth
-          variant="outlined"
-          onClick={() => alert('Connexion avec Microsoft 365')}
-          sx={{
-            py: 1.2,
-            borderRadius: 2,
-            fontFamily: 'Inter, sans-serif',
-            fontWeight: 500,
-            fontSize: '0.88rem',
-            textTransform: 'none',
-            borderColor: '#E2E8F0',
-            color: '#374151',
-            gap: 1.5,
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              borderColor: '#1565C0',
-              bgcolor: 'rgba(21, 101, 192, 0.04)',
-              transform: 'translateY(-1px)',
-            },
-          }}
-          startIcon={
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <rect x="0" y="0" width="8.5" height="8.5" fill="#F25022" />
-              <rect x="9.5" y="0" width="8.5" height="8.5" fill="#7FBA00" />
-              <rect x="0" y="9.5" width="8.5" height="8.5" fill="#00A4EF" />
-              <rect x="9.5" y="9.5" width="8.5" height="8.5" fill="#FFB900" />
-            </svg>
-          }
-        >
-          Microsoft 365
-        </Button>
+        
 
         <Button
           fullWidth
