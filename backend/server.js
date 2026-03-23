@@ -8,7 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 dotenv.config();
 
 const app = express()
-const port = 4000
+const port = 5000
 
 app.use(cors());  // autorise toutes les requêtes
 app.use(express.static('public'))
