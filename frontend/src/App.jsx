@@ -1,12 +1,13 @@
-import { useState } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import SignInSide from './pages/SignInSide'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/signin" element={<SignInSide />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signin" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   )

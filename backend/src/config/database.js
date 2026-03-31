@@ -1,5 +1,7 @@
-import pkg from "pg";
-import dotenv from "dotenv";
+
+const pkg = require('pg');
+const dotenv = require('dotenv')
+
 
 const {Pool} = pkg;
 dotenv.config();
@@ -16,4 +18,4 @@ pool.on("connect", () => {
     console.log("connexion à la base de données réussie");
 });
 
-export default pool;
+module.exports = pool;

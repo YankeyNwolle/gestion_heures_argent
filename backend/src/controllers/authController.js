@@ -1,9 +1,10 @@
-// controllers/authController.js
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const pool = require("../config/database");
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { email, password, first_name, last_name } = req.body;
 
     const userExists = await pool.query(
       "SELECT * FROM users WHERE email = $1",
@@ -19,8 +20,8 @@ exports.register = async (req, res) => {
 
     // insérer le nouvel utilisateur dans la base de données
     const newUser = await pool.query(
-      "INSERT INTO users (email,password_hash,first_name,last_name) VALUES ($1, $2, $3,$4,$5) RETURNING id, email, password_hash,first_name,last_name",
-      [name, email, hashedPassword]
+      "INSERT INTO users (email, password_hash, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id, email, first_name, last_name",
+      [email, hashedPassword, first_name, last_name]
     );
 
     res.status(201).json({

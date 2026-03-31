@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { register as apiRegister } from '../API/auth';
+import { register as apiRegister } from '../api/auth';
+import './LoginPage.css';
 
 /* ─── Shared logo/header ─────────────────────────────────── */
 function AuthHeader() {
@@ -110,7 +111,7 @@ function RegisterForm() {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      grade: 'maitre_assistant',
+      grade: 'assistant',
       status: 'permanent',
     },
   });
@@ -191,6 +192,7 @@ function RegisterForm() {
             <option value="assistant">Assistant</option>
             <option value="maitre_assistant">Maître assistant</option>
             <option value="professeur">Professeur</option>
+            <option value="maitre_conferences">Maître de Conférences</option>
           </select>
           {errors.grade && <div className="form-error">⚠ {errors.grade.message}</div>}
         </div>
@@ -246,7 +248,7 @@ function RegisterForm() {
       )}
 
       <div className="auth-info-box">
-        ℹ Le compte créé est un compte <strong>Enseignant</strong> avec votre grade et statut. Pour un rôle administrateur ou RH, contactez l’administration.
+        Le compte créé est un compte <strong>Enseignant</strong> avec votre grade et statut. Pour un rôle administrateur ou RH, contactez l’administration.
       </div>
 
       <button
@@ -255,7 +257,6 @@ function RegisterForm() {
         className="btn btn-primary btn-lg w-full auth-btn"
         disabled={loading}
       >
-        {loading ? <span className="spinner" /> : '✨'}
         {loading ? 'Inscription en cours…' : 'Créer mon compte'}
       </button>
     </form>
