@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { register as apiRegister } from '../api/auth';
+import { register as apiRegister } from '../API/auth';
 import './LoginPage.css';
 
 /* ─── Shared logo/header ─────────────────────────────────── */
@@ -26,6 +26,25 @@ function LoginForm() {
   const location   = useLocation();
   const [loading, setLoading]   = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  {/* Icônes SVG à ajouter en haut du fichier, avant les composants */}
+
+const EyeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
 
   const { register, handleSubmit, formState: { errors } } = useForm();
 
@@ -37,9 +56,7 @@ function LoginForm() {
       toast.success(`Bienvenue, ${user.first_name} !`);
       const from = location.state?.from?.pathname;
       const hasDeepLink = from && from !== '/login' && from !== '/';
-      const dest = hasDeepLink
-        ? from
-        : (user.role === 'enseignant' ? '/hours' : '/');
+      const dest = hasDeepLink ? from : '/dashboard';
       navigate(dest, { replace: true });
     } catch (err) {
       const msg =
@@ -62,7 +79,7 @@ function LoginForm() {
           id="login-email"
           type="email"
           className={`form-control${errors.email ? ' error' : ''}`}
-          placeholder="vous@universite.ci"
+          placeholder="vous@gmail.com"
           {...register('email', {
             required: "L'email est requis",
             pattern: { value: /\S+@\S+\.\S+/, message: 'Email invalide' },
@@ -73,13 +90,23 @@ function LoginForm() {
 
       <div className="form-group">
         <label className="form-label" htmlFor="login-password">Mot de passe</label>
-        <input
-          id="login-password"
-          type="password"
-          className={`form-control${errors.password ? ' error' : ''}`}
-          placeholder="••••••••"
-          {...register('password', { required: 'Le mot de passe est requis' })}
-        />
+        <div className="password-input-wrapper">
+          <input
+            id="login-password"
+            type={showPassword ? 'text' : 'password'}
+            className={`form-control${errors.password ? ' error' : ''}`}
+            placeholder="••••••••"
+            {...register('password', { required: 'Le mot de passe est requis' })}
+          />
+          <button
+            type="button"
+            className="toggle-password-btn"
+            onClick={() => setShowPassword(!showPassword)}
+            title={showPassword ? 'Masquer' : 'Afficher'}
+          >
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+        </div>
         {errors.password && <div className="form-error">⚠ {errors.password.message}</div>}
       </div>
 
@@ -108,6 +135,26 @@ function RegisterForm() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  {/* Icônes SVG à ajouter en haut du fichier, avant les composants */}
+
+const EyeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
@@ -148,7 +195,7 @@ function RegisterForm() {
             id="reg-firstname"
             type="text"
             className={`form-control${errors.first_name ? ' error' : ''}`}
-            placeholder="Jean"
+            placeholder="Ange"
             {...register('first_name', { required: 'Prénom requis' })}
           />
           {errors.first_name && <div className="form-error">⚠ {errors.first_name.message}</div>}
@@ -159,7 +206,7 @@ function RegisterForm() {
             id="reg-lastname"
             type="text"
             className={`form-control${errors.last_name ? ' error' : ''}`}
-            placeholder="Dupont"
+            placeholder="Yankey"
             {...register('last_name', { required: 'Nom requis' })}
           />
           {errors.last_name && <div className="form-error">⚠ {errors.last_name.message}</div>}
@@ -172,7 +219,7 @@ function RegisterForm() {
           id="reg-email"
           type="email"
           className={`form-control${errors.email ? ' error' : ''}`}
-          placeholder="jean.dupont@universite.ci"
+          placeholder="nwolle14@gmail.com"
           {...register('email', {
             required: "L'email est requis",
             pattern: { value: /\S+@\S+\.\S+/, message: 'Email invalide' },
@@ -213,31 +260,51 @@ function RegisterForm() {
 
       <div className="form-group">
         <label className="form-label" htmlFor="reg-password">Mot de passe</label>
-        <input
-          id="reg-password"
-          type="password"
-          className={`form-control${errors.password ? ' error' : ''}`}
-          placeholder="Min. 8 caractères"
-          {...register('password', {
-            required: 'Mot de passe requis',
-            minLength: { value: 8, message: 'Min. 8 caractères' },
-          })}
-        />
+        <div className="password-input-wrapper">
+          <input
+            id="reg-password"
+            type={showPassword ? 'text' : 'password'}
+            className={`form-control${errors.password ? ' error' : ''}`}
+            placeholder="Min. 8 caractères"
+            {...register('password', {
+              required: 'Mot de passe requis',
+              minLength: { value: 8, message: 'Min. 8 caractères' },
+            })}
+          />
+          <button
+            type="button"
+            className="toggle-password-btn"
+            onClick={() => setShowPassword(!showPassword)}
+            title={showPassword ? 'Masquer' : 'Afficher'}
+          >
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+        </div>
         {errors.password && <div className="form-error">⚠ {errors.password.message}</div>}
       </div>
 
       <div className="form-group">
         <label className="form-label" htmlFor="reg-confirm">Confirmer le mot de passe</label>
-        <input
-          id="reg-confirm"
-          type="password"
-          className={`form-control${errors.confirm ? ' error' : ''}`}
-          placeholder="Répétez le mot de passe"
-          {...register('confirm', {
-            required: 'Confirmation requise',
-            validate: (v) => v === password || 'Les mots de passe ne correspondent pas',
-          })}
-        />
+        <div className="password-input-wrapper">
+          <input
+            id="reg-confirm"
+            type={showConfirm ? 'text' : 'password'}
+            className={`form-control${errors.confirm ? ' error' : ''}`}
+            placeholder="Répétez le mot de passe"
+            {...register('confirm', {
+              required: 'Confirmation requise',
+              validate: (v) => v === password || 'Les mots de passe ne correspondent pas',
+            })}
+          />
+          <button
+            type="button"
+            className="toggle-password-btn"
+            onClick={() => setShowConfirm(!showConfirm)}
+            title={showConfirm ? 'Masquer' : 'Afficher'}
+          >
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+        </div>
         {errors.confirm && <div className="form-error">⚠ {errors.confirm.message}</div>}
       </div>
 
@@ -248,7 +315,7 @@ function RegisterForm() {
       )}
 
       <div className="auth-info-box">
-        Le compte créé est un compte <strong>Enseignant</strong> avec votre grade et statut. Pour un rôle administrateur ou RH, contactez l’administration.
+        Le compte créé est un compte <strong>Enseignant</strong> avec votre grade et statut. Pour un rôle administrateur ou RH, contactez l'administration.
       </div>
 
       <button
