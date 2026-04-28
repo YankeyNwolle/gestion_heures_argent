@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { register as apiRegister } from '../API/auth';
+import { register as apiRegister } from '../api/auth';
 import './LoginPage.css';
+import logo_gestion_heures from "../assets/logo_gestion_heures.png";
 
 /* ─── Shared logo/header ─────────────────────────────────── */
 function AuthHeader() {
@@ -55,7 +56,7 @@ function LoginForm() {
       toast.success(`Bienvenue, ${user.first_name} !`);
       const from = location.state?.from?.pathname;
       const hasDeepLink = from && from !== '/login' && from !== '/';
-      const dest = hasDeepLink ? from : '/dashboard';
+      const dest = hasDeepLink ? from : '/utilisateur'; // mettre le dashboard après connexion
       navigate(dest, { replace: true });
     } catch (err) {
       const msg =
@@ -171,7 +172,7 @@ const EyeOffIcon = () => (
       const { token, user } = res.data;
       setSessionFromAuthResponse(token, user);
       toast.success(`Compte créé ! Bienvenue, ${first_name} 🎉`);
-      navigate('/hours', { replace: true });
+      navigate('/utilisateur', { replace: true });
     } catch (err) {
       const msg =
         err.response?.data?.error ||

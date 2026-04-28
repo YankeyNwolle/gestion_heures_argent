@@ -23,7 +23,8 @@
   --green-600: #16a34a;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --radius: 6px;
-  --font-main: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  /* --font-main: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; */
+  --font-main: "Roboto Condensed", sans-serif;
 }
 
 *,

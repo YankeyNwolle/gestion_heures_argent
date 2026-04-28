@@ -194,7 +194,8 @@ export default function DashboardPage() {
                   strokeWidth="2"
                 />
               </svg>
-              <span>vendredi 13 mars 2026</span>
+              {/* <span>{getFormatteDate()}</span> */}
+              <span>today</span>
             </div>
           </section>
 
