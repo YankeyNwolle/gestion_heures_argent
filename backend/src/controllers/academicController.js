@@ -1,0 +1,21 @@
+import * as AcademicModel from "../models/academicModel.js";
+
+// ─── Departments ────────────────────────────────────────
+export const getDepartments = async (req,res) => { try{res.json({departments:await AcademicModel.getAllDepartments()});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const getDepartment = async (req,res) => { try{const d=await AcademicModel.getDepartmentById(parseInt(req.params.id));if(!d)return res.status(404).json({message:"Département non trouvé"});res.json({department:d});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const createDepartment = async (req,res) => { try{const d=await AcademicModel.createDepartment(req.body);res.status(201).json({message:"Département créé",department:d});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const updateDepartment = async (req,res) => { try{const d=await AcademicModel.updateDepartment(parseInt(req.params.id),req.body);if(!d)return res.status(404).json({message:"Département non trouvé"});res.json({message:"Département mis à jour",department:d});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const deleteDepartment = async (req,res) => { try{const d=await AcademicModel.deleteDepartment(parseInt(req.params.id));if(!d)return res.status(404).json({message:"Département non trouvé"});res.json({message:"Département supprimé"});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+
+// ─── Programs ───────────────────────────────────────────
+export const getPrograms = async (req,res) => { try{res.json({programs:await AcademicModel.getAllPrograms(req.query.department_id?parseInt(req.query.department_id):null)});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const createProgram = async (req,res) => { try{const p=await AcademicModel.createProgram(req.body);res.status(201).json({message:"Filière créée",program:p});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const updateProgram = async (req,res) => { try{const p=await AcademicModel.updateProgram(parseInt(req.params.id),req.body);if(!p)return res.status(404).json({message:"Filière non trouvée"});res.json({message:"Filière mise à jour",program:p});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const deleteProgram = async (req,res) => { try{const p=await AcademicModel.deleteProgram(parseInt(req.params.id));if(!p)return res.status(404).json({message:"Filière non trouvée"});res.json({message:"Filière supprimée"});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+
+// ─── Subjects ───────────────────────────────────────────
+export const getSubjects = async (req,res) => { try{res.json({subjects:await AcademicModel.getAllSubjects(req.query.program_id?parseInt(req.query.program_id):null)});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const getSubject = async (req,res) => { try{const s=await AcademicModel.getSubjectById(parseInt(req.params.id));if(!s)return res.status(404).json({message:"Matière non trouvée"});res.json({subject:s});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const createSubject = async (req,res) => { try{const s=await AcademicModel.createSubject(req.body);res.status(201).json({message:"Matière créée",subject:s});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const updateSubject = async (req,res) => { try{const s=await AcademicModel.updateSubject(parseInt(req.params.id),req.body);if(!s)return res.status(404).json({message:"Matière non trouvée"});res.json({message:"Matière mise à jour",subject:s});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };
+export const deleteSubject = async (req,res) => { try{const s=await AcademicModel.deleteSubject(parseInt(req.params.id));if(!s)return res.status(404).json({message:"Matière non trouvée"});res.json({message:"Matière supprimée"});}catch(e){console.error(e);res.status(500).json({message:"Erreur serveur"});} };

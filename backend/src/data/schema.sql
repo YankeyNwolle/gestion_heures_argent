@@ -167,6 +167,10 @@ CREATE TABLE hour_entries (
     room             VARCHAR(60),
     notes            TEXT,
     created_by       INTEGER REFERENCES users(id),
+    status           VARCHAR(20) DEFAULT 'pending',  -- pending, validated, contested
+    validated_by     INTEGER REFERENCES users(id),
+    validated_at     TIMESTAMP,
+    contest_reason   TEXT,
     created_at       TIMESTAMP DEFAULT NOW(),
     updated_at       TIMESTAMP DEFAULT NOW()
 );
@@ -269,19 +273,19 @@ INSERT INTO subjects (name, code, program_id, cm_hours, td_hours, tp_hours, coef
 -- IMPORTANT: Remplacer ces hashes par de vrais hashes en production via npm run seed
 INSERT INTO users (email, password_hash, first_name, last_name, role) VALUES
     ('admin@universite.ci',
-     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj6v0OD9y3lm',
+     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
      'Système', 'Administrateur', 'admin'),
     ('rh@universite.ci',
-     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj6v0OD9y3lm',
+     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
      'Marie', 'Konan', 'rh'),
     ('jean.dupont@universite.ci',
-     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj6v0OD9y3lm',
+     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
      'Jean', 'Dupont', 'enseignant'),
     ('fatou.diallo@universite.ci',
-     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj6v0OD9y3lm',
+     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
      'Fatou', 'Diallo', 'enseignant'),
     ('kouame.assi@universite.ci',
-     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj6v0OD9y3lm',
+     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
      'Kouamé', 'Assi', 'enseignant');
 
 -- Profils enseignants

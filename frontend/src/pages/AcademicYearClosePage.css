@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+.ayc-layout { display:flex; min-height:100vh; font-family:'Inter',sans-serif; background:#e8f0fb; }
+
+/* ─── Sidebar — blanc & bleu ───────────────────────── */
+.ayc-sidebar { width:260px; background:#fff; color:#0d2137; display:flex; flex-direction:column; position:fixed; height:100vh; z-index:100; border-right:1px solid rgba(21,101,192,.14); box-shadow:2px 0 12px rgba(13,71,161,.06); }
+.ayc-sidebar__logo { display:flex; align-items:center; gap:12px; padding:24px 20px; border-bottom:1px solid rgba(21,101,192,.12); }
+.ayc-logo-icon { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#1565c0,#1976d2); display:flex; align-items:center; justify-content:center; color:#fff; }
+.ayc-logo-icon .material-symbols-outlined { font-size:22px; }
+.ayc-logo-title { font-size:16px; font-weight:700; color:#0d2137; }
+.ayc-logo-sub { font-size:11px; color:#6b8aad; margin-top:2px; }
+.ayc-nav { flex:1; overflow-y:auto; padding:12px 10px; }
+.ayc-nav-section { margin-bottom:8px; }
+.ayc-nav-section-label { font-size:10px; text-transform:uppercase; letter-spacing:1.2px; color:#6b8aad; padding:8px 12px 4px; font-weight:600; }
+.ayc-nav-item { display:flex; align-items:center; gap:10px; width:100%; padding:10px 14px; border:none; background:none; color:#4a6785; font-size:13px; border-radius:8px; cursor:pointer; transition:all .15s; text-align:left; }
+.ayc-nav-item:hover { background:#f0f6ff; color:#0d2137; }
+.ayc-nav-item--active { background:rgba(21,101,192,.12); color:#0d47a1; font-weight:600; }
+.ayc-nav-item .material-symbols-outlined { font-size:20px; }
+.ayc-sidebar__footer { padding:12px 10px; border-top:1px solid rgba(21,101,192,.12); }
+
+/* ─── Main ────────────────────────────────────────── */
+.ayc-main-wrapper { margin-left:260px; flex:1; display:flex; flex-direction:column; }
+
+/* ─── Topbar ──────────────────────────────────────── */
+.ayc-topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 32px; background:#fff; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:50; }
+.ayc-topbar__title { font-size:20px; font-weight:800; color:#0f172a; }
+.ayc-topbar__sub { font-size:13px; color:#64748b; }
+
+/* ─── Buttons ─────────────────────────────────────── */
+.ayc-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 18px; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+.ayc-btn .material-symbols-outlined { font-size:18px; }
+.ayc-btn--primary { background:linear-gradient(135deg,#1565c0,#0d47a1); color:#fff; box-shadow:0 2px 8px rgba(21,101,192,.28); }
+.ayc-btn--primary:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(13,71,161,.35); }
+.ayc-btn--outline { background:#fff; color:#334155; border:1px solid rgba(21,101,192,.2); }
+.ayc-btn--outline:hover { background:#f0f6ff; border-color:#1565c0; color:#0d47a1; }
+.ayc-btn--danger { background:#fff; color:#b71c1c; border:1px solid rgba(198,40,40,.35); box-shadow:none; }
+.ayc-btn--danger:hover { transform:translateY(-1px); background:#ffebee; border-color:rgba(198,40,40,.5); }
+.ayc-btn--ghost { background:none; color:#64748b; border:1px solid #e2e8f0; }
+.ayc-btn:disabled { opacity:.5; cursor:not-allowed; transform:none !important; }
+
+/* ─── Content ─────────────────────────────────────── */
+.ayc-content { padding:28px 32px; flex:1; }
+
+/* ─── Info Banner ─────────────────────────────────── */
+.ayc-info-banner { display:flex; gap:16px; padding:20px 24px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border:1px solid #bfdbfe; border-radius:14px; margin-bottom:28px; }
+.ayc-info-icon { font-size:24px !important; color:#3b82f6; flex-shrink:0; margin-top:2px; }
+.ayc-info-title { font-weight:700; color:#1e40af; margin-bottom:4px; font-size:14px; }
+.ayc-info-text { font-size:13px; color:#1e3a5f; line-height:1.6; }
+
+/* ─── Years Grid ──────────────────────────────────── */
+.ayc-years-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:20px; }
+.ayc-year-card { background:#fff; border-radius:16px; padding:24px; border:1px solid #e2e8f0; transition:all .2s; }
+.ayc-year-card:hover { transform:translateY(-3px); box-shadow:0 8px 25px rgba(0,0,0,.06); }
+.ayc-year-card--active { border-color:#1565c0; box-shadow:0 0 0 2px rgba(21,101,192,.15); background:linear-gradient(135deg,#f0f6ff,#e3f2fd); }
+.ayc-year-card__header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.ayc-year-card__icon-wrap { width:44px; height:44px; border-radius:12px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; }
+.ayc-year-card--active .ayc-year-card__icon-wrap { background:linear-gradient(135deg,#1565c0,#1976d2); }
+.ayc-year-card--active .ayc-year-card__icon-wrap .material-symbols-outlined { color:#fff; }
+.ayc-year-card__icon-wrap .material-symbols-outlined { font-size:22px; color:#64748b; }
+.ayc-year-badge { background:linear-gradient(135deg,#1565c0,#1976d2); color:#fff; font-size:10px; font-weight:700; padding:4px 10px; border-radius:20px; letter-spacing:.5px; }
+.ayc-year-card__label { font-size:22px; font-weight:800; color:#0f172a; margin-bottom:16px; letter-spacing:-.5px; }
+.ayc-year-card__dates { display:flex; align-items:center; gap:12px; margin-bottom:20px; padding:14px; background:#f8fafc; border-radius:10px; }
+.ayc-date-label { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:#94a3b8; font-weight:600; margin-bottom:2px; }
+.ayc-date-value { font-size:13px; font-weight:600; color:#334155; }
+.ayc-date-arrow { color:#cbd5e1; }
+.ayc-year-card__actions { display:flex; gap:8px; }
+
+/* ─── Modal ───────────────────────────────────────── */
+.ayc-modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(13,33,55,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:200; }
+.ayc-modal { background:#fff; border-radius:20px; width:100%; max-width:480px; padding:28px; box-shadow:0 25px 60px rgba(0,0,0,.15); }
+.ayc-modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+.ayc-modal-header h3 { font-size:18px; font-weight:700; color:#0f172a; }
+.ayc-modal-close { width:32px; height:32px; border:none; background:#f1f5f9; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.ayc-modal-close:hover { background:#e2e8f0; }
+.ayc-modal-form { display:flex; flex-direction:column; gap:16px; }
+.ayc-form-group { display:flex; flex-direction:column; gap:6px; }
+.ayc-form-group label { font-size:12px; font-weight:600; color:#475569; }
+.ayc-form-group input[type="text"], .ayc-form-group input[type="date"] { padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; transition:border .15s; }
+.ayc-form-group input:focus { outline:none; border-color:#1565c0; box-shadow:0 0 0 3px rgba(21,101,192,.15); }
+.ayc-form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.ayc-checkbox-label { display:flex; align-items:center; gap:8px; font-size:13px; color:#334155; cursor:pointer; }
+.ayc-checkbox-label input { width:16px; height:16px; accent-color:#1565c0; }
+.ayc-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
+
+.ayc-loading { padding:60px; text-align:center; color:#94a3b8; font-size:14px; }
+
+@media (max-width:1024px) {
+  .ayc-sidebar { display:none; }
+  .ayc-main-wrapper { margin-left:0; }
+}
