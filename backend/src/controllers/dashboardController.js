@@ -6,7 +6,16 @@ import * as HourModel from "../models/hourModel.js";
 export const getStats = async (req, res) => {
   try {
     const currentYear = await getCurrentAcademicYear();
-    if (!currentYear) return res.json({totalEtd:0,complementaryHours:0,amountDue:0,teachersOverLimit:0,teacherCount:0});
+    const stats = {
+      totalEtd: 0,
+      complementaryHours: 0,
+      amountDue: 0,
+      teachersOverLimit: 0,
+      teacherCount: 0,
+      academicYear: currentYear ? currentYear.label : 'Aucune active'
+    };
+
+    if (!currentYear) return res.json(stats);
 
     // Stats globales ou individuelles selon le rôle
     let teacherId = null;
@@ -28,22 +37,19 @@ export const getStats = async (req, res) => {
     const result = await pool.query(statsQuery, params);
     const rows = result.rows;
 
-    const totalEtd = rows.reduce((s,r)=>s+parseFloat(r.total_etd||0),0);
-    const complementaryHours = rows.reduce((s,r)=>s+parseFloat(r.complementary_etd||0),0);
-    const amountDue = rows.reduce((s,r)=>s+parseFloat(r.amount_due||0),0);
-    const teachersOverLimit = rows.filter(r=>parseFloat(r.complementary_etd||0)>0).length;
+    stats.totalEtd = rows.reduce((s,r)=>s+parseFloat(r.total_etd||0),0);
+    stats.complementaryHours = rows.reduce((s,r)=>s+parseFloat(r.complementary_etd||0),0);
+    stats.amountDue = rows.reduce((s,r)=>s+parseFloat(r.amount_due||0),0);
+    stats.teachersOverLimit = rows.filter(r=>parseFloat(r.complementary_etd||0)>0).length;
 
     const teacherCountResult = await pool.query(`SELECT COUNT(*) as c FROM teachers t JOIN users u ON u.id=t.user_id WHERE u.is_active=TRUE`);
+    stats.teacherCount = parseInt(teacherCountResult.rows[0].c);
 
-    res.json({
-      totalEtd: Math.round(totalEtd*100)/100,
-      complementaryHours: Math.round(complementaryHours*100)/100,
-      amountDue: Math.round(amountDue),
-      teachersOverLimit,
-      teacherCount: parseInt(teacherCountResult.rows[0].c),
-      academicYear: currentYear.label
-    });
-  } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+    res.json(stats);
+  } catch(e) { 
+    console.error("Dashboard Stats Error:", e); 
+    res.status(500).json({message:"Erreur lors de la récupération des statistiques"}); 
+  }
 };
 
 export const getMonthlyChart = async (req, res) => {
@@ -74,5 +80,41 @@ export const getTeacherSummary = async (req, res) => {
     if (!currentYear) return res.json({teachers:[]});
     const result = await pool.query(`SELECT * FROM v_teacher_balance WHERE academic_year=$1 ORDER BY last_name`,[currentYear.label]);
     res.json({teachers: result.rows, academicYear: currentYear.label});
+  } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+};
+
+export const getDepartmentStats = async (req, res) => {
+  try {
+    const currentYear = await getCurrentAcademicYear();
+    if (!currentYear) return res.json({data:[]});
+    const result = await pool.query(
+      `SELECT d.name, SUM(h.etd_hours) as total_etd
+       FROM hour_entries h
+       JOIN teachers t ON t.id = h.teacher_id
+       JOIN departments d ON d.id = t.department_id
+       WHERE h.academic_year_id = $1
+       GROUP BY d.name
+       ORDER BY total_etd DESC`,
+      [currentYear.id]
+    );
+    res.json({data: result.rows});
+  } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+};
+
+export const getProgramStats = async (req, res) => {
+  try {
+    const currentYear = await getCurrentAcademicYear();
+    if (!currentYear) return res.json({data:[]});
+    const result = await pool.query(
+      `SELECT p.name, p.level, SUM(h.etd_hours) as total_etd
+       FROM hour_entries h
+       JOIN subjects s ON s.id = h.subject_id
+       JOIN programs p ON p.id = s.program_id
+       WHERE h.academic_year_id = $1
+       GROUP BY p.name, p.level
+       ORDER BY total_etd DESC`,
+      [currentYear.id]
+    );
+    res.json({data: result.rows});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };

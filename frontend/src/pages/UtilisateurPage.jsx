@@ -24,6 +24,9 @@ function UserModal({ user: editUser, onClose, onSaved }) {
     email:      editUser?.email      || '',
     password:   '',
     role:       editUser?.role       || 'enseignant',
+    grade:      editUser?.grade      || 'assistant',
+    status:     editUser?.status     || 'permanent',
+    contractual_hours: editUser?.contractual_hours || 192,
   });
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +45,15 @@ function UserModal({ user: editUser, onClose, onSaved }) {
     try {
       setSaving(true);
       if (isEdit) {
-        const payload = { first_name: form.first_name, last_name: form.last_name, email: form.email, role: form.role };
+        const payload = { 
+          first_name: form.first_name, 
+          last_name: form.last_name, 
+          email: form.email, 
+          role: form.role,
+          grade: form.grade,
+          status: form.status,
+          contractual_hours: parseFloat(form.contractual_hours)
+        };
         await updateUser(editUser.id, payload);
         toast.success('Utilisateur mis à jour');
       } else {
@@ -105,6 +116,31 @@ function UserModal({ user: editUser, onClose, onSaved }) {
               <option value="admin">Administrateur</option>
             </select>
           </div>
+
+          {form.role === 'enseignant' && (
+            <div className="form-grid-3" style={{ marginTop: 14 }}>
+              <div className="form-field">
+                <label className="form-label">Grade *</label>
+                <select className="form-select" value={form.grade} onChange={e => set('grade', e.target.value)}>
+                  <option value="assistant">Assistant</option>
+                  <option value="maitre_assistant">Maître Assistant</option>
+                  <option value="professeur">Professeur</option>
+                  <option value="autres">Autres</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label">Statut *</label>
+                <select className="form-select" value={form.status} onChange={e => set('status', e.target.value)}>
+                  <option value="permanent">Permanent</option>
+                  <option value="vacataire">Vacataire</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label">Quota (h ETD) *</label>
+                <input className="form-input" type="number" value={form.contractual_hours} onChange={e => set('contractual_hours', e.target.value)} />
+              </div>
+            </div>
+          )}
 
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Annuler</button>

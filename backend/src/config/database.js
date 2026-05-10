@@ -14,7 +14,12 @@ const pool = new Pool({
 });
 
 pool.on("connect", () => {
-  console.log("Connexion à la base de données réussie");
+  console.log("✅ Connexion à la base de données réussie");
+});
+
+pool.on("error", (err) => {
+  console.error("❌ Erreur inattendue du pool de connexion PostgreSQL :", err);
+  process.exit(-1);
 });
 
 export default pool;

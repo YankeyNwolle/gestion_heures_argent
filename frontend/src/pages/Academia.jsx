@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { getDepartments, getPrograms, getSubjects, createSubject, getTeachers } from '../api/auth';
+import { getDepartments, getUEs, getSubjects, createSubject, getTeachers, importTeachers } from '../api/auth';
 import './Academia.css';
 
 /* ── Tabs ────────────────────────────────────────────────── */
-const TABS = ['Enseignants', 'Départements', 'Filières', 'Matières'];
+const TABS = ['Enseignants', 'Départements', 'UE (Unités d\'Ens.)', 'Matières'];
 
 const GRADE_BADGE = {
   assistant:        'badge-neutral',
   maitre_assistant: 'badge-primary',
   professeur:       'badge-warning',
+  autres:           'badge-info',
 };
 const STATUS_BADGE = {
   permanent: 'badge-success',
@@ -24,16 +25,16 @@ function fmtDate(s) {
 function getInitials(fn, ln) { return `${(fn||'')[0]||''}${(ln||'')[0]||''}`.toUpperCase()||'?'; }
 
 /* ── Modal nouvelle matière ──────────────────────────────── */
-function SubjectModal({ programs, onClose, onSaved }) {
-  const [form, setForm] = useState({ name:'', code:'', program_id:'', cm_hours:0, td_hours:0, tp_hours:0, coefficient:1 });
+function SubjectModal({ ues, onClose, onSaved }) {
+  const [form, setForm] = useState({ name:'', code:'', ue_id:'', cm_hours:0, td_hours:0, tp_hours:0, coefficient:1 });
   const [saving, setSaving] = useState(false);
   function set(k,v) { setForm(p=>({...p,[k]:v})); }
   async function handle(e) {
     e.preventDefault();
-    if (!form.name || !form.program_id) { toast.error('Nom et filière requis'); return; }
+    if (!form.name || !form.ue_id) { toast.error('Nom et UE requis'); return; }
     try {
       setSaving(true);
-      await createSubject({ ...form, program_id: parseInt(form.program_id) });
+      await createSubject({ ...form, ue_id: parseInt(form.ue_id) });
       toast.success('Matière créée');
       onSaved();
     } catch(err) { toast.error(err?.response?.data?.message||'Erreur'); }
@@ -52,10 +53,10 @@ function SubjectModal({ programs, onClose, onSaved }) {
             <div className="form-field"><label className="form-label">Code</label><input className="form-input" value={form.code} onChange={e=>set('code',e.target.value)} /></div>
           </div>
           <div className="form-field" style={{marginTop:12}}>
-            <label className="form-label">Filière *</label>
-            <select className="form-select" value={form.program_id} onChange={e=>set('program_id',e.target.value)}>
+            <label className="form-label">UE *</label>
+            <select className="form-select" value={form.ue_id} onChange={e=>set('ue_id',e.target.value)}>
               <option value="">— Sélectionner —</option>
-              {programs.map(p=><option key={p.id} value={p.id}>{p.name} ({p.level})</option>)}
+              {ues.map(u=><option key={u.id} value={u.id}>{u.name} ({u.level})</option>)}
             </select>
           </div>
           <div className="form-grid-3" style={{marginTop:12}}>
@@ -84,23 +85,25 @@ export default function Academia() {
   const [tab, setTab]           = useState(0);
   const [teachers, setTeachers] = useState([]);
   const [depts, setDepts]       = useState([]);
-  const [programs, setPrograms] = useState([]);
+  const [ues, setUEs]           = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showSubjModal, setShowSubjModal] = useState(false);
+  const [filterLevel, setFilterLevel] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [tRes, dRes, pRes, sRes] = await Promise.all([
+      const [tRes, dRes, uRes, sRes] = await Promise.all([
         getTeachers(),
         getDepartments(),
-        getPrograms(),
+        getUEs(),
         getSubjects(),
       ]);
       setTeachers(tRes.data.teachers || []);
       setDepts(dRes.data.departments || dRes.data || []);
-      setPrograms(pRes.data.programs || pRes.data || []);
+      setUEs(uRes.data.ues || uRes.data || []);
       setSubjects(sRes.data.subjects || sRes.data || []);
     } catch { toast.error('Erreur de chargement'); }
     finally { setLoading(false); }
@@ -120,12 +123,28 @@ export default function Academia() {
       {/* ── Enseignants ── */}
       {tab === 0 && (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <h3 style={{ fontSize: 14, fontWeight: 700 }}>Enseignants ({teachers.length})</h3>
+            <div style={{ display:'flex', gap:10 }}>
+              <input type="file" id="import-excel" hidden onChange={async (e)=>{
+                if(!e.target.files?.[0]) return;
+                try {
+                  setImporting(true);
+                  const res = await importTeachers(e.target.files[0]);
+                  toast.success(res.data.message);
+                  load();
+                } catch (err) { toast.error('Erreur import'); }
+                finally { setImporting(false); }
+              }} />
+              <button className="btn btn-ghost btn-sm" disabled={importing} onClick={()=>document.getElementById('import-excel').click()}>
+                <span className="material-symbols-outlined" style={{fontSize:16}}>upload_file</span>
+                {importing ? 'Import en cours...' : 'Importer Excel'}
+              </button>
+            </div>
           </div>
           <div className="data-table-wrap">
             <table className="data-table">
-              <thead><tr><th>Enseignant</th><th>Grade</th><th>Statut</th><th>Département</th><th style={{textAlign:'right'}}>Service (h ETD)</th><th>Spécialité</th></tr></thead>
+              <thead><tr><th>Enseignant</th><th>Grade/Rang</th><th>Statut</th><th>Département</th><th style={{textAlign:'right'}}>Service (h ETD)</th><th>Spécialité</th></tr></thead>
               <tbody>
                 {loading ? Array.from({length:4}).map((_,i)=>(
                   <tr key={i}>{Array.from({length:6}).map((_,j)=><td key={j}><div className="skeleton" style={{height:13,width:'75%',borderRadius:4}}/></td>)}</tr>
@@ -142,7 +161,12 @@ export default function Academia() {
                         </div>
                       </div>
                     </td>
-                    <td><span className={`badge ${GRADE_BADGE[t.grade]||'badge-neutral'}`}>{(t.grade||'').replace('_',' ')}</span></td>
+                    <td>
+                      <div style={{display:'flex', gap:4}}>
+                        <span className={`badge ${GRADE_BADGE[t.grade]||'badge-neutral'}`}>{(t.grade||'').replace('_',' ')}</span>
+                        {t.rank && <span className="badge badge-primary">Rang {t.rank}</span>}
+                      </div>
+                    </td>
                     <td><span className={`badge ${STATUS_BADGE[t.status]||'badge-neutral'}`}>{t.status}</span></td>
                     <td style={{fontSize:12,color:'var(--text-muted)'}}>{t.department_name||'—'}</td>
                     <td style={{textAlign:'right',fontSize:13,fontWeight:600}}>{t.contractual_hours}</td>
@@ -182,11 +206,16 @@ export default function Academia() {
         </div>
       )}
 
-      {/* ── Filières ── */}
+      {/* ── UEs ── */}
       {tab === 2 && (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700 }}>Filières ({programs.length})</h3>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700 }}>Unités d'Enseignement ({ues.length})</h3>
+            <select className="form-select form-select-sm" style={{ width:120 }} value={filterLevel} onChange={e=>setFilterLevel(e.target.value)}>
+              <option value="">Tous Niveaux</option>
+              <option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option>
+              <option value="M1">M1</option><option value="M2">M2</option>
+            </select>
           </div>
           <div className="data-table-wrap">
             <table className="data-table">
@@ -194,14 +223,14 @@ export default function Academia() {
               <tbody>
                 {loading ? Array.from({length:4}).map((_,i)=>(
                   <tr key={i}>{Array.from({length:4}).map((_,j)=><td key={j}><div className="skeleton" style={{height:13,width:'70%',borderRadius:4}}/></td>)}</tr>
-                )) : programs.length===0 ? (
-                  <tr><td colSpan={4}><div className="empty-state"><span className="material-symbols-outlined">account_tree</span><h4>Aucune filière</h4></div></td></tr>
-                ) : programs.map(p=>(
-                  <tr key={p.id}>
-                    <td style={{fontWeight:600,fontSize:13}}>{p.name}</td>
-                    <td><span className="badge badge-primary">{p.code||'—'}</span></td>
-                    <td><span className="badge badge-info">{p.level}</span></td>
-                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{p.department_name||'—'}</td>
+                )) : ues.filter(u=>!filterLevel || u.level===filterLevel).length===0 ? (
+                  <tr><td colSpan={4}><div className="empty-state"><span className="material-symbols-outlined">account_tree</span><h4>Aucune UE trouvée</h4></div></td></tr>
+                ) : ues.filter(u=>!filterLevel || u.level===filterLevel).map(u=>(
+                  <tr key={u.id}>
+                    <td style={{fontWeight:600,fontSize:13}}>{u.name}</td>
+                    <td><span className="badge badge-primary">{u.code||'—'}</span></td>
+                    <td><span className="badge badge-info">{u.level}</span></td>
+                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{u.department_name||'—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -227,11 +256,11 @@ export default function Academia() {
                   <tr key={i}>{Array.from({length:7}).map((_,j)=><td key={j}><div className="skeleton" style={{height:13,width:'65%',borderRadius:4}}/></td>)}</tr>
                 )) : subjects.length===0 ? (
                   <tr><td colSpan={7}><div className="empty-state"><span className="material-symbols-outlined">menu_book</span><h4>Aucune matière</h4></div></td></tr>
-                ) : subjects.map(s=>(
+                ) : subjects.filter(s=>!filterLevel || s.level===filterLevel).map(s=>(
                   <tr key={s.id}>
                     <td style={{fontWeight:600,fontSize:13}}>{s.name}</td>
                     <td><span className="badge badge-neutral">{s.code||'—'}</span></td>
-                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{s.program_name||'—'}</td>
+                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{s.ue_name||'—'} ({s.level})</td>
                     <td style={{textAlign:'right',fontSize:12}}>{s.cm_hours||0}h</td>
                     <td style={{textAlign:'right',fontSize:12}}>{s.td_hours||0}h</td>
                     <td style={{textAlign:'right',fontSize:12}}>{s.tp_hours||0}h</td>
@@ -245,7 +274,7 @@ export default function Academia() {
       )}
 
       {showSubjModal && (
-        <SubjectModal programs={programs} onClose={() => setShowSubjModal(false)} onSaved={() => { setShowSubjModal(false); load(); }} />
+        <SubjectModal ues={ues} onClose={() => setShowSubjModal(false)} onSaved={() => { setShowSubjModal(false); load(); }} />
       )}
     </Layout>
   );

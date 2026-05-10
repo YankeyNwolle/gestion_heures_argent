@@ -133,19 +133,19 @@ export default function SaisieHeures() {
   return (
     <Layout title="Saisie des heures" subtitle="Enregistrez vos heures d'enseignement">
       <div className="sh-layout">
-        {/* ── Formulaire ── */}
-        <div className="card sh-form-card">
-          <div className="sh-form-header">
-            <span className="material-symbols-outlined sh-form-header-icon">edit_note</span>
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 700 }}>Nouvelle séance</h3>
-              <p style={{ fontSize: 12 }}>Année académique : {currentYear?.label || '—'}</p>
+        {/* ── Formulaire (Uniquement Admin/RH) ── */}
+        {canManage ? (
+          <div className="card sh-form-card">
+            <div className="sh-form-header">
+              <span className="material-symbols-outlined sh-form-header-icon">edit_note</span>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>Nouvelle séance</h3>
+                <p style={{ fontSize: 12 }}>Année académique : {currentYear?.label || '—'}</p>
+              </div>
             </div>
-          </div>
 
-          <form onSubmit={handleSubmit}>
-            {/* Enseignant (visible admin/rh) */}
-            {canManage && (
+            <form onSubmit={handleSubmit}>
+              {/* Enseignant */}
               <div className="form-field sh-form-field">
                 <label className="form-label">Enseignant *</label>
                 <select className="form-select" value={form.teacher_id}
@@ -153,81 +153,95 @@ export default function SaisieHeures() {
                   <option value="">— Sélectionner —</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.first_name} {t.last_name} ({t.grade?.replace('_', ' ')})
+                      {t.first_name} {t.last_name} ({t.grade?.replace('_', ' ')}) {t.rank ? `[Rang ${t.rank}]` : ''}
                     </option>
                   ))}
                 </select>
               </div>
-            )}
 
-            {/* Date + Matière */}
-            <div className="form-grid-2 sh-form-field">
-              <div className="form-field">
-                <label className="form-label">Date de la séance *</label>
-                <input className="form-input" type="date" value={form.date}
-                  onChange={e => set('date', e.target.value)} max={today} />
-              </div>
-              <div className="form-field">
-                <label className="form-label">Matière (UE) *</label>
-                <select className="form-select" value={form.subject_id}
-                  onChange={e => set('subject_id', e.target.value)}>
-                  <option value="">— Sélectionner —</option>
-                  {subjects.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Type + Durée + Salle */}
-            <div className="form-grid-3 sh-form-field">
-              <div className="form-field">
-                <label className="form-label">Type d'heure *</label>
-                <div className="sh-toggle">
-                  {['CM', 'TD', 'TP'].map(t => (
-                    <button key={t} type="button"
-                      className={`sh-toggle-btn${form.type === t ? ' active' : ''}`}
-                      style={form.type === t ? { background: TYPE_COLORS[t], borderColor: TYPE_COLORS[t], color: '#fff' } : {}}
-                      onClick={() => set('type', t)}
-                    >{t}</button>
-                  ))}
+              {/* Date + Matière */}
+              <div className="form-grid-2 sh-form-field">
+                <div className="form-field">
+                  <label className="form-label">Date de la séance *</label>
+                  <input className="form-input" type="date" value={form.date}
+                    onChange={e => set('date', e.target.value)} max={today} />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Matière (UE) *</label>
+                  <select className="form-select" value={form.subject_id}
+                    onChange={e => set('subject_id', e.target.value)}>
+                    <option value="">— Sélectionner —</option>
+                    {subjects.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-              <div className="form-field">
-                <label className="form-label">Durée réelle (h) *</label>
-                <input className="form-input" type="number" min="0.5" max="12" step="0.5"
-                  value={form.hours} onChange={e => set('hours', parseFloat(e.target.value) || 0)} />
-              </div>
-              <div className="form-field">
-                <label className="form-label">Salle / Amphi</label>
-                <input className="form-input" type="text" placeholder="Ex: Amphi A"
-                  value={form.room} onChange={e => set('room', e.target.value)} />
-              </div>
-            </div>
 
-            {/* Notes */}
-            <div className="form-field sh-form-field">
-              <label className="form-label">Commentaires (optionnel)</label>
-              <textarea className="form-textarea" rows={2}
-                placeholder="Contenu de la séance, observations…"
-                value={form.notes} onChange={e => set('notes', e.target.value)} />
-            </div>
+              {/* Type + Durée + Salle */}
+              <div className="form-grid-3 sh-form-field">
+                <div className="form-field">
+                  <label className="form-label">Type d'heure *</label>
+                  <div className="sh-toggle">
+                    {['CM', 'TD', 'TP'].map(t => (
+                      <button key={t} type="button"
+                        className={`sh-toggle-btn${form.type === t ? ' active' : ''}`}
+                        style={form.type === t ? { background: TYPE_COLORS[t], borderColor: TYPE_COLORS[t], color: '#fff' } : {}}
+                        onClick={() => set('type', t)}
+                      >{t}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Durée réelle (h) *</label>
+                  <input className="form-input" type="number" min="0.5" max="12" step="0.5"
+                    value={form.hours} onChange={e => set('hours', parseFloat(e.target.value) || 0)} />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Salle / Amphi</label>
+                  <input className="form-input" type="text" placeholder="Ex: Amphi A"
+                    value={form.room} onChange={e => set('room', e.target.value)} />
+                </div>
+              </div>
 
-            {/* Submit */}
-            <div className="sh-form-actions">
-              <button type="button" className="btn btn-ghost"
-                onClick={() => setForm({ date: today, subject_id: '', teacher_id: canManage?'':form.teacher_id, type: 'CM', hours: 2, room: '', notes: '' })}>
-                Réinitialiser
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving
-                  ? <><span className="material-symbols-outlined spin" style={{ fontSize: 16 }}>refresh</span> Enregistrement…</>
-                  : <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span> Enregistrer la séance</>
-                }
+              {/* Notes */}
+              <div className="form-field sh-form-field">
+                <label className="form-label">Commentaires (optionnel)</label>
+                <textarea className="form-textarea" rows={2}
+                  placeholder="Contenu de la séance, observations…"
+                  value={form.notes} onChange={e => set('notes', e.target.value)} />
+              </div>
+
+              {/* Submit */}
+              <div className="sh-form-actions">
+                <button type="button" className="btn btn-ghost"
+                  onClick={() => setForm({ date: today, subject_id: '', teacher_id: '', type: 'CM', hours: 2, room: '', notes: '' })}>
+                  Réinitialiser
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving
+                    ? <><span className="material-symbols-outlined spin" style={{ fontSize: 16 }}>refresh</span> Enregistrement…</>
+                    : <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span> Enregistrer la séance</>
+                  }
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="card sh-info-card">
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 48, color: 'var(--primary)', marginBottom: 16 }}>lock</span>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Saisie restreinte</h3>
+              <p style={{ color: 'var(--text-muted)', maxWidth: 400, margin: '0 auto' }}>
+                Les heures sont désormais programmées par le département ou la RH. 
+                Veuillez vous rendre dans l'onglet <strong>Validation</strong> pour confirmer vos séances.
+              </p>
+              <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={() => window.location.href = '/validation'}>
+                Aller aux validations
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        )}
 
         {/* ── Colonne droite ── */}
         <div className="sh-right-col">
@@ -293,6 +307,7 @@ export default function SaisieHeures() {
             <thead>
               <tr>
                 <th>Date</th>
+                {canManage && <th>Enseignant</th>}
                 <th>Matière</th>
                 <th>Type</th>
                 <th style={{ textAlign: 'right' }}>Durée</th>
@@ -303,13 +318,13 @@ export default function SaisieHeures() {
             <tbody>
               {loadingData ? (
                 Array.from({length:3}).map((_,i)=>(
-                  <tr key={i}>{Array.from({length:6}).map((_,j)=>(
+                  <tr key={i}>{Array.from({length:canManage?7:6}).map((_,j)=>(
                     <td key={j}><div className="skeleton" style={{height:12,width:'70%',borderRadius:4}}/></td>
                   ))}</tr>
                 ))
               ) : recentHours.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={canManage ? 7 : 6}>
                     <div className="empty-state" style={{ padding: '24px 0' }}>
                       <span className="material-symbols-outlined">schedule</span>
                       <h4>Aucune saisie récente</h4>
@@ -322,6 +337,11 @@ export default function SaisieHeures() {
                   return (
                     <tr key={h.id}>
                       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(h.date)}</td>
+                      {canManage && (
+                        <td style={{ fontSize: 13, fontWeight: 500 }}>
+                          {h.teacher_first_name} {h.teacher_last_name}
+                        </td>
+                      )}
                       <td style={{ fontSize: 13 }}>{h.subject_name || '—'}</td>
                       <td>
                         <span className="badge" style={{ background: `${TYPE_COLORS[h.type]}20`, color: TYPE_COLORS[h.type] }}>

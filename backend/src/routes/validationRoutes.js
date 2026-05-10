@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get("/pending", getPendingHours);
-router.put("/:id/validate", requireRole("admin","rh"), validateHour);
+router.put("/:id/validate", validateHour); // Permission check in controller
 router.put("/validate-all", requireRole("admin","rh"), validateAll);
 router.put("/:id/contest", contestHour);
 

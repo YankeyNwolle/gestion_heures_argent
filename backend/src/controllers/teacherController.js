@@ -1,9 +1,16 @@
 import * as TeacherModel from "../models/teacherModel.js";
+import * as UserModel from "../models/userModel.js";
+import ExcelJS from "exceljs";
+import pool from "../config/database.js";
+import fs from "fs";
 
 export const getTeachers = async (req, res) => {
   try {
     const {page=1,limit=20,grade,status,department_id,search} = req.query;
+    console.log("DEBUG: getTeachers query params:", req.query);
+    console.log("DEBUG: req.user:", req.user);
     const result = await TeacherModel.getAllTeachers({page:parseInt(page),limit:parseInt(limit),grade,status,department_id:department_id?parseInt(department_id):null,search});
+    console.log("DEBUG: Teachers found:", result.teachers.length, "Total:", result.pagination.total);
     res.json(result);
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };
@@ -60,4 +67,94 @@ export const getTeacherCount = async (req, res) => {
     const count = await TeacherModel.getTeacherCount();
     res.json({count});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+};
+export const importTeachers = async (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "Fichier Excel requis" });
+  
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(req.file.path);
+    const worksheet = workbook.getWorksheet(1);
+    
+    const teachers = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip header
+      teachers.push({
+        email: row.getCell(1).text,
+        first_name: row.getCell(2).text,
+        last_name: row.getCell(3).text,
+        grade: row.getCell(4).text, // assistant, maitre_assistant, professeur
+        rank: row.getCell(5).text,  // A, B
+        status: row.getCell(6).text, // permanent, vacataire
+        speciality: row.getCell(7).text,
+        department_code: row.getCell(8).text
+      });
+    });
+
+    const results = { success: 0, errors: 0, details: [] };
+
+    for (const t of teachers) {
+      try {
+        if (!t.email || !t.first_name) continue;
+
+        // 1. Check if user exists
+        let user = await UserModel.getUserByEmail(t.email);
+        if (!user) {
+          user = await UserModel.createUser({
+            email: t.email,
+            first_name: t.first_name,
+            last_name: t.last_name,
+            password: "Password123!", // Default password
+            role: "enseignant"
+          });
+        }
+
+        // 2. Get department id
+        const deptRes = await pool.query("SELECT id FROM departments WHERE code = $1", [t.department_code]);
+        const deptId = deptRes.rows[0]?.id || null;
+
+        // 3. Determine contractual hours based on rank
+        let hours = 192;
+        if (t.rank === 'B') hours = 240;
+        if (t.rank === 'A') hours = 150;
+
+        // 4. Create or Update teacher profile
+        const existingTeacher = await TeacherModel.getTeacherByUserId(user.id);
+        if (existingTeacher) {
+          await TeacherModel.updateTeacher(existingTeacher.id, {
+            department_id: deptId,
+            grade: t.grade || existingTeacher.grade,
+            rank: t.rank || existingTeacher.rank,
+            status: t.status || existingTeacher.status,
+            speciality: t.speciality || existingTeacher.speciality,
+            contractual_hours: hours
+          });
+        } else {
+          await TeacherModel.createTeacher({
+            user_id: user.id,
+            department_id: deptId,
+            grade: t.grade || 'assistant',
+            rank: t.rank || null,
+            status: t.status || 'permanent',
+            speciality: t.speciality || '',
+            contractual_hours: hours
+          });
+        }
+
+        results.success++;
+      } catch (err) {
+        results.errors++;
+        results.details.push({ email: t.email, error: err.message });
+      }
+    }
+
+    // Clean up file
+    fs.unlinkSync(req.file.path);
+
+    res.json({ message: "Import terminé", results });
+  } catch (e) {
+    console.error(e);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ message: "Erreur lors de l'import", detail: e.message });
+  }
 };

@@ -36,22 +36,27 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await pool.query("SELECT * FROM users WHERE email=$1",[email]);
-    if (user.rows.length === 0) return res.status(401).json({message:"Identifiants invalides"});
-    if (!user.rows[0].is_active) return res.status(403).json({message:"Compte désactivé. Contactez l'administration."});
-    const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
+    const userQuery = await pool.query(
+      `SELECT u.*, t.id as teacher_id 
+       FROM users u LEFT JOIN teachers t ON t.user_id = u.id 
+       WHERE u.email=$1`, [email]
+    );
+    if (userQuery.rows.length === 0) return res.status(401).json({message:"Identifiants invalides"});
+    const user = userQuery.rows[0];
+    if (!user.is_active) return res.status(403).json({message:"Compte désactivé. Contactez l'administration."});
+    const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(401).json({message:"Identifiants invalides"});
-    await updateLastLogin(user.rows[0].id);
+    await updateLastLogin(user.id);
     // Include role in JWT for RBAC
     const token = jwt.sign(
-      {id:user.rows[0].id,email:user.rows[0].email,role:user.rows[0].role},
+      {id:user.id,email:user.email,role:user.role},
       process.env.JWT_SECRET,{expiresIn:"8h"}
     );
     // Audit log
     pool.query(`INSERT INTO audit_logs(user_id,action,table_name,details)VALUES($1,'POST','/api/auth/login',$2)`,
-      [user.rows[0].id,JSON.stringify({email})]
+      [user.id,JSON.stringify({email})]
     ).catch(()=>{});
-    res.json({token,user:{id:user.rows[0].id,email:user.rows[0].email,first_name:user.rows[0].first_name,last_name:user.rows[0].last_name,role:user.rows[0].role}});
+    res.json({token,user:{id:user.id,email:user.email,first_name:user.first_name,last_name:user.last_name,role:user.role,teacher_id:user.teacher_id}});
   } catch(error) { console.error(error); res.status(500).json({message:"Erreur serveur"}); }
 };
 

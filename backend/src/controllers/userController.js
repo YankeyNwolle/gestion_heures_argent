@@ -1,4 +1,5 @@
 import * as UserModel from "../models/userModel.js";
+import * as TeacherModel from "../models/teacherModel.js";
 
 export const getUsers = async (req, res) => {
   try {
@@ -18,19 +19,53 @@ export const getUser = async (req, res) => {
 
 export const createUser = async (req, res) => {
   try {
-    const {email,password,first_name,last_name,role} = req.body;
-    if (!email||!password||!first_name||!last_name) return res.status(400).json({message:"Champs requis manquants"});
+    const { email, password, first_name, last_name, role, grade, status } = req.body;
+    if (!email || !password || !first_name || !last_name) {
+      return res.status(400).json({ message: "Champs requis manquants" });
+    }
+
     const existing = await UserModel.getUserByEmail(email);
-    if (existing) return res.status(400).json({message:"Email déjà utilisé"});
-    const user = await UserModel.createUser({email,password,first_name,last_name,role});
-    res.status(201).json({message:"Utilisateur créé",user});
-  } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+    if (existing) return res.status(400).json({ message: "Email déjà utilisé" });
+
+    const user = await UserModel.createUser({ email, password, first_name, last_name, role });
+
+    const normalizedRole = (role || '').toString().trim().toLowerCase();
+
+    if (normalizedRole === 'enseignant' || normalizedRole === 'teacher') {
+      await TeacherModel.createTeacher({
+        user_id: user.id,
+        department_id: null,
+        grade: grade || 'assistant',
+        status: status || 'permanent',
+        speciality: null,
+      });
+    }
+
+ res.status(201).json({ message: "Utilisateur créé", user });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
 };
 
 export const updateUser = async (req, res) => {
   try {
-    const user = await UserModel.updateUser(parseInt(req.params.id), req.body);
+    const userId = parseInt(req.params.id);
+    const { first_name, last_name, email, role, grade, status } = req.body;
+    
+    const user = await UserModel.updateUser(userId, { first_name, last_name, email, role });
     if (!user) return res.status(404).json({message:"Utilisateur non trouvé"});
+
+    const normalizedRole = (role || user.role || '').toString().trim().toLowerCase();
+    if (normalizedRole === 'enseignant' || normalizedRole === 'teacher') {
+      const teacher = await TeacherModel.getTeacherByUserId(userId);
+      if (teacher) {
+        await TeacherModel.updateTeacher(teacher.id, { grade, status });
+      } else {
+        await TeacherModel.createTeacher({ user_id: userId, grade: grade || 'assistant', status: status || 'permanent' });
+      }
+    }
+
     res.json({message:"Utilisateur mis à jour",user});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };

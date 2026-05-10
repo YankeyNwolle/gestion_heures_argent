@@ -102,9 +102,19 @@ export const deleteHour = async (req, res) => {
 
 export const getRecentHours = async (req, res) => {
   try {
+    const limit = parseInt(req.query.limit || 10);
+    
+    // Si Admin ou RH, on montre ses propres saisies (qu'il a créées pour les autres)
+    if (req.user.role === 'admin' || req.user.role === 'rh') {
+      const entries = await HourModel.getRecentEntriesByCreator(req.user.id, limit);
+      return res.json({ entries, hours: entries });
+    }
+
+    // Si Enseignant, on montre ses propres heures
     const teacher = await getTeacherByUserId(req.user.id);
-    if (!teacher) return res.json({entries:[]});
-    const entries = await HourModel.getRecentEntries(teacher.id, parseInt(req.query.limit||10));
+    if (!teacher) return res.json({ entries: [], hours: [] });
+    
+    const entries = await HourModel.getRecentEntries(teacher.id, limit);
     res.json({ entries, hours: entries });
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };

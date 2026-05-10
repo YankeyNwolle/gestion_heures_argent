@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { getPendingHours, validateHour, validateAllHours, contestHour } from '../api/auth';
+import { getPendingHours, validateHour, validateAllHours, contestHour, exportTeacherPDF } from '../api/auth';
 import './Validation.css';
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -56,10 +56,11 @@ function ContestModal({ entry, onClose, onConfirm }) {
 
 /* ── Main ────────────────────────────────────────────────── */
 export default function ValidationPage() {
-  const { canManage } = useAuth();
+  const { user, canManage, isTeacher } = useAuth();
 
   const [entries,  setEntries]  = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [contest,  setContest]  = useState(null); // entry en contestation
   const [actionId, setActionId] = useState(null); // id en cours d'action
 
@@ -113,12 +114,38 @@ export default function ValidationPage() {
     }
   }
 
+  async function handleDownload() {
+    if (!user?.teacher_id) {
+      toast.error("Profil enseignant non trouvé");
+      return;
+    }
+    try {
+      setDownloading(true);
+      const res = await exportTeacherPDF(user.teacher_id);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `recapitulatif_${user.last_name}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Récapitulatif téléchargé');
+    } catch (err) {
+      toast.error('Erreur lors du téléchargement');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const pendingCount   = entries.filter(e => e.status === 'pending').length;
   const contestedCount = entries.filter(e => e.status === 'contested').length;
   const totalETD       = entries.reduce((s, e) => s + parseFloat(e.etd_hours || 0), 0);
 
   return (
-    <Layout title="Validation des heures" subtitle="Vérifiez et validez les séances enregistrées">
+    <Layout 
+      title={isTeacher ? "Mes heures et validations" : "Validation des heures"} 
+      subtitle={isTeacher ? "Consultez, confirmez ou contestez vos séances enregistrées par la RH" : "Vérifiez et validez les séances enregistrées"}
+    >
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ marginBottom: 20 }}>
@@ -158,10 +185,16 @@ export default function ValidationPage() {
               {entries.length} séance(s) en attente de traitement
             </p>
           </div>
-          {canManage && pendingCount > 0 && (
-            <button className="btn btn-primary" onClick={handleValidateAll}>
+          {(canManage || entries.length > 0) && pendingCount > 0 && (
+            <button className="btn btn-primary" onClick={handleValidateAll} disabled={!canManage}>
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>done_all</span>
               Tout valider ({pendingCount})
+            </button>
+          )}
+          {isTeacher && (
+            <button className="btn btn-secondary" onClick={handleDownload} disabled={downloading}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>download</span>
+              {downloading ? 'Téléchargement…' : 'Télécharger mon récapitulatif'}
             </button>
           )}
         </div>
@@ -178,7 +211,7 @@ export default function ValidationPage() {
                 <th style={{ textAlign: 'right' }}>Durée</th>
                 <th style={{ textAlign: 'right' }}>ETD</th>
                 <th>Statut</th>
-                {canManage && <th style={{ textAlign: 'right' }}>Actions</th>}
+                <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -228,39 +261,37 @@ export default function ValidationPage() {
                         : <span className="badge badge-warning">En attente</span>
                       }
                     </td>
-                    {canManage && (
-                      <td>
-                        {entry.status === 'pending' && (
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              style={{ color: 'var(--success)', borderColor: 'var(--success-light)', background: 'var(--success-light)' }}
-                              disabled={actionId === entry.id}
-                              onClick={() => handleValidate(entry.id)}
-                            >
-                              {actionId === entry.id
-                                ? <span className="material-symbols-outlined spin" style={{ fontSize: 14 }}>refresh</span>
-                                : <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check</span>
-                              }
-                              Valider
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ color: 'var(--danger)' }}
-                              onClick={() => setContest(entry)}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
-                              Contester
-                            </button>
-                          </div>
-                        )}
-                        {entry.status === 'contested' && (
-                          <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right', maxWidth: 200 }}>
-                            {entry.contest_reason || '—'}
-                          </div>
-                        )}
-                      </td>
-                    )}
+                    <td>
+                      {entry.status === 'pending' && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ color: 'var(--success)', borderColor: 'var(--success-light)', background: 'var(--success-light)' }}
+                            disabled={actionId === entry.id}
+                            onClick={() => handleValidate(entry.id)}
+                          >
+                            {actionId === entry.id
+                              ? <span className="material-symbols-outlined spin" style={{ fontSize: 14 }}>refresh</span>
+                              : <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check</span>
+                            }
+                            Valider
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--danger)' }}
+                            onClick={() => setContest(entry)}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
+                            Contester
+                          </button>
+                        </div>
+                      )}
+                      {entry.status === 'contested' && (
+                        <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'right', maxWidth: 200 }}>
+                          {entry.contest_reason || '—'}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

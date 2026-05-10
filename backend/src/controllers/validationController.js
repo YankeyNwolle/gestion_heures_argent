@@ -20,8 +20,19 @@ export const getPendingHours = async (req, res) => {
 
 export const validateHour = async (req, res) => {
   try {
-    const entry = await HourModel.validateEntry(parseInt(req.params.id), req.user.id);
-    if (!entry) return res.status(404).json({message:"Saisie non trouvée"});
+    const entryId = parseInt(req.params.id);
+    const existingEntry = await HourModel.getHourEntryById(entryId);
+    if (!existingEntry) return res.status(404).json({message:"Saisie non trouvée"});
+
+    // Si enseignant, vérifier que c'est le sien
+    if (req.user.role === 'enseignant') {
+      const teacher = await getTeacherByUserId(req.user.id);
+      if (!teacher || existingEntry.teacher_id !== teacher.id) {
+        return res.status(403).json({message:"Action non autorisée sur cette séance"});
+      }
+    }
+
+    const entry = await HourModel.validateEntry(entryId, req.user.id);
     res.json({message:"Heure validée",entry});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };
@@ -38,8 +49,20 @@ export const contestHour = async (req, res) => {
   try {
     const {reason} = req.body;
     if (!reason) return res.status(400).json({message:"Motif de contestation requis"});
-    const entry = await HourModel.contestEntry(parseInt(req.params.id), reason);
-    if (!entry) return res.status(404).json({message:"Saisie non trouvée"});
+    
+    const entryId = parseInt(req.params.id);
+    const existingEntry = await HourModel.getHourEntryById(entryId);
+    if (!existingEntry) return res.status(404).json({message:"Saisie non trouvée"});
+
+    // Si enseignant, vérifier que c'est le sien
+    if (req.user.role === 'enseignant') {
+      const teacher = await getTeacherByUserId(req.user.id);
+      if (!teacher || existingEntry.teacher_id !== teacher.id) {
+        return res.status(403).json({message:"Action non autorisée sur cette séance"});
+      }
+    }
+
+    const entry = await HourModel.contestEntry(entryId, reason);
     res.json({message:"Heure contestée",entry});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };

@@ -1,11 +1,30 @@
-@import "tailwindcss";
-
 /* ============================================================
    GestHeures — Design System Global (clair bleu & blanc)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+/* ── Material Symbols Global ────────────────────────────── */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 18px; /* Slightly smaller */
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden; /* Prevent text overflow if font fails */
+  text-indent: -9999px; /* Hide text if font fails */
+}
+
+/* Ensure font is applied to show the icon */
+.material-symbols-outlined:not(:empty) {
+  text-indent: 0;
+}
 
 /* ── Design Tokens ──────────────────────────────────────── */
 :root {
@@ -60,7 +79,7 @@
   --t-med:  250ms ease;
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 14px;
+  font-size: 13px; /* Slightly smaller for density */
   line-height: 1.5;
   color-scheme: light;
 }
@@ -396,7 +415,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .page-title    { font-size: 20px; font-weight: 700; margin-bottom: 3px; }
 .page-subtitle { font-size: 13px; color: var(--text-muted); }
-.page-actions  { display: flex; gap: 8px; flex-shrink: 0; }
+/* ── KPI Card Extra ──────────────────────────────────────── */
+.kpi-card__icon .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Dashboard specific: huge background icons fix */
+.kpi-card .material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+}
 
 /* ── Section grid ───────────────────────────────────────── */
 .kpi-grid {

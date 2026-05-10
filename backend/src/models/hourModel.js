@@ -49,6 +49,18 @@ export const getRecentEntries = async (teacherId, limit=5) => {
   return r.rows;
 };
 
+export const getRecentEntriesByCreator = async (userId, limit=10) => {
+  const r = await pool.query(
+    `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name
+     FROM hour_entries h 
+     LEFT JOIN subjects s ON s.id=h.subject_id
+     LEFT JOIN teachers t ON t.id=h.teacher_id
+     LEFT JOIN users u ON u.id=t.user_id
+     WHERE h.created_by=$1 ORDER BY h.created_at DESC LIMIT $2`, [userId,limit]
+  );
+  return r.rows;
+};
+
 export const getPendingEntries = async (academic_year_id=null) => {
   let q = `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name, t.grade
      FROM hour_entries h LEFT JOIN subjects s ON s.id=h.subject_id

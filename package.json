@@ -7,6 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

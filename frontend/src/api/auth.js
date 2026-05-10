@@ -55,6 +55,11 @@ export const getTeacher        = (id)     => API.get(`/teachers/${id}`);
 export const getMyTeacherProfile = ()     => API.get('/teachers/me');
 export const createTeacher     = (data)   => API.post('/teachers', data);
 export const updateTeacher     = (id, data) => API.put(`/teachers/${id}`, data);
+export const importTeachers    = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return API.post('/teachers/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 export const getTeacherBalance = (id, year) => API.get(`/teachers/${id}/balance`, { params: { year } });
 
 // ─── Hours ──────────────────────────────────────────────
@@ -84,17 +89,22 @@ export const closeYear          = (id)     => API.put(`/settings/academic-years/
 
 // ─── Academic ───────────────────────────────────────────
 export const getDepartments  = ()       => API.get('/academic/departments');
-export const getPrograms     = (params) => API.get('/academic/programs', { params });
+export const getUEs          = (params) => API.get('/academic/ues', { params });
 export const getSubjects     = (params) => API.get('/academic/subjects', { params });
 export const createSubject   = (data)   => API.post('/academic/subjects', data);
 
 // ─── Export ─────────────────────────────────────────────
 export const exportTeacherPDF  = (teacherId) => API.get(`/export/pdf/${teacherId}`, { responseType: 'blob' });
+export const exportGlobalPDF   = ()          => API.get('/export/pdf-global', { responseType: 'blob' });
 export const exportExcel       = ()          => API.get('/export/excel', { responseType: 'blob' });
 export const getPaymentStatus  = ()          => API.get('/export/payments');
 
 // ─── Audit ──────────────────────────────────────────────
 export const getAuditLogs    = (params) => API.get('/audit', { params });
 export const getRecentAudit  = (limit)  => API.get('/audit/recent', { params: { limit } });
+
+// ─── Dashboard Extra ────────────────────────────────────
+export const getDepartmentStats = () => API.get('/dashboard/departments');
+export const getProgramStats    = () => API.get('/dashboard/programs');
 
 export default API;

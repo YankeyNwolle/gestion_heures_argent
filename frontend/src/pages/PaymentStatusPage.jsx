@@ -25,8 +25,14 @@ export default function PaymentStatusPage() {
       try {
         setLoading(true);
         const res = await getPaymentStatus();
-        if (active) setData(res.data.teachers || res.data || []);
-      } catch { toast.error('Impossible de charger les données de paiement'); }
+        if (active) {
+          const payments = res.data.payments || res.data || [];
+          setData(Array.isArray(payments) ? payments : []);
+        }
+      } catch (err) { 
+        console.error(err);
+        toast.error('Impossible de charger les données de paiement'); 
+      }
       finally { if(active) setLoading(false); }
     }
     load();

@@ -13,11 +13,11 @@ router.post("/departments", requireRole("admin"), AC.createDepartment);
 router.put("/departments/:id", requireRole("admin"), AC.updateDepartment);
 router.delete("/departments/:id", requireRole("admin"), AC.deleteDepartment);
 
-// Programs
-router.get("/programs", AC.getPrograms);
-router.post("/programs", requireRole("admin"), AC.createProgram);
-router.put("/programs/:id", requireRole("admin"), AC.updateProgram);
-router.delete("/programs/:id", requireRole("admin"), AC.deleteProgram);
+// UEs
+router.get("/ues", AC.getUEs);
+router.post("/ues", requireRole("admin"), AC.createUE);
+router.put("/ues/:id", requireRole("admin"), AC.updateUE);
+router.delete("/ues/:id", requireRole("admin"), AC.deleteUE);
 
 // Subjects
 router.get("/subjects", AC.getSubjects);

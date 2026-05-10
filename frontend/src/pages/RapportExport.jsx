@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { exportExcel, exportTeacherPDF, getTeachers } from '../api/auth';
+import { exportExcel, exportTeacherPDF, getTeachers, exportGlobalPDF } from '../api/auth';
 import './RapportExport.css';
 
 export default function RapportExport() {
@@ -10,6 +10,7 @@ export default function RapportExport() {
   const [loadingT, setLoadingT]     = useState(false);
   const [exportingXls, setXls]      = useState(false);
   const [exportingPdf, setPdf]      = useState(false);
+  const [exportingGlobal, setGlobal] = useState(false);
   const [loaded, setLoaded]         = useState(false);
 
   async function loadTeachers() {
@@ -36,6 +37,19 @@ export default function RapportExport() {
     finally { setXls(false); }
   }
 
+  async function handlePdfGlobal() {
+    try {
+      setGlobal(true);
+      const res = await exportGlobalPDF();
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url;
+      a.download = `etat_global_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.success('État global PDF téléchargé');
+    } catch { toast.error('Erreur lors de l\'export PDF global'); }
+    finally { setGlobal(false); }
+  }
+
   async function handlePdf() {
     if (!selectedT) { toast.error('Veuillez sélectionner un enseignant'); return; }
     try {
@@ -56,9 +70,9 @@ export default function RapportExport() {
           <div className="rapport-card-icon" style={{ background:'rgba(21,101,192,0.12)', color:'#1565c0' }}>
             <span className="material-symbols-outlined">table_view</span>
           </div>
-          <h3 className="rapport-card-title">Rapport global Excel</h3>
+          <h3 className="rapport-card-title">État pour la comptabilité (Excel)</h3>
           <p className="rapport-card-desc">
-            Exporte toutes les données d'heures complémentaires, montants dus et récapitulatifs par enseignant pour l'année académique en cours.
+            Exporte toutes les données d'heures complémentaires, montants dus et récapitulatifs par enseignant au format Excel.
           </p>
           <div className="rapport-card-footer">
             <span className="badge badge-primary">Format .xlsx</span>
@@ -71,14 +85,34 @@ export default function RapportExport() {
           </div>
         </div>
 
+        {/* Export global PDF */}
+        <div className="card rapport-card">
+          <div className="rapport-card-icon" style={{ background:'rgba(239,68,68,0.12)', color:'#ef4444' }}>
+            <span className="material-symbols-outlined">description</span>
+          </div>
+          <h3 className="rapport-card-title">État global des heures (PDF)</h3>
+          <p className="rapport-card-desc">
+            Génère un récapitulatif PDF de l'ensemble des enseignants, leurs heures normales/complémentaires et les montants à payer.
+          </p>
+          <div className="rapport-card-footer">
+            <span className="badge badge-danger">Format PDF</span>
+            <button className="btn btn-primary" onClick={handlePdfGlobal} disabled={exportingGlobal}>
+              {exportingGlobal
+                ? <><span className="material-symbols-outlined spin" style={{fontSize:16}}>refresh</span>Génération…</>
+                : <><span className="material-symbols-outlined" style={{fontSize:16}}>download</span>Télécharger</>
+              }
+            </button>
+          </div>
+        </div>
+
         {/* Export PDF individuel */}
         <div className="card rapport-card">
           <div className="rapport-card-icon" style={{ background:'rgba(2,132,199,0.12)', color:'#0277bd' }}>
             <span className="material-symbols-outlined">picture_as_pdf</span>
           </div>
-          <h3 className="rapport-card-title">Fiche enseignant PDF</h3>
+          <h3 className="rapport-card-title">Fiche enseignant individuelle</h3>
           <p className="rapport-card-desc">
-            Génère une fiche individuelle récapitulant les heures effectuées, le bilan ETD et le montant calculé pour un enseignant.
+            Génère une fiche individuelle récapitulant les heures effectuées, le bilan ETD et le montant calculé pour un enseignant spécifique.
           </p>
           <div className="form-field" style={{ marginBottom:14 }}>
             <label className="form-label">Sélectionner un enseignant</label>
@@ -111,11 +145,11 @@ export default function RapportExport() {
           <div className="rapport-card-icon" style={{ background:'rgba(21,101,192,0.1)', color:'#0d47a1' }}>
             <span className="material-symbols-outlined">info</span>
           </div>
-          <h3 className="rapport-card-title">À propos des exports</h3>
+          <h3 className="rapport-card-title">À propos des rapports</h3>
           <ul className="rapport-info-list">
-            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--primary)'}}>check_circle</span>Les données exportées correspondent à l'année académique <strong>active</strong></li>
-            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--info)'}}>calculate</span>Les montants sont calculés selon les taux définis dans les Paramètres</li>
-            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--primary-hover)'}}>warning</span>Seules les heures <strong>validées</strong> sont incluses dans les rapports</li>
+            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--primary)'}}>check_circle</span>Basés sur l'année académique active</li>
+            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--info)'}}>calculate</span>Calculés selon les taux de grade/statut</li>
+            <li><span className="material-symbols-outlined" style={{fontSize:14,color:'var(--primary-hover)'}}>warning</span>Incluent uniquement les heures validées</li>
           </ul>
         </div>
       </div>

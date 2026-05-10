@@ -11,7 +11,7 @@ import pool from "../config/database.js";
 export const getAllTeachers = async ({ page = 1, limit = 20, grade = null, status = null, department_id = null, search = null }) => {
   const offset = (page - 1) * limit;
   let query = `
-    SELECT t.id, t.user_id, t.grade, t.status, t.speciality, t.contractual_hours,
+    SELECT t.id, t.user_id, t.grade, t.rank, t.status, t.speciality, t.contractual_hours,
            t.created_at, t.updated_at,
            u.email, u.first_name, u.last_name, u.is_active,
            d.name as department_name, d.code as department_code, d.id as department_id
@@ -93,12 +93,12 @@ export const getTeacherByUserId = async (userId) => {
 /**
  * Créer un profil enseignant (lié à un user existant).
  */
-export const createTeacher = async ({ user_id, department_id, grade, status, speciality, contractual_hours = 192.00 }) => {
+export const createTeacher = async ({ user_id, department_id, grade, rank, status, speciality, contractual_hours = 192.00 }) => {
   const result = await pool.query(
-    `INSERT INTO teachers (user_id, department_id, grade, status, speciality, contractual_hours)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO teachers (user_id, department_id, grade, rank, status, speciality, contractual_hours)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [user_id, department_id || null, grade, status, speciality || null, contractual_hours]
+    [user_id, department_id || null, grade, rank || null, status, speciality || null, contractual_hours]
   );
   return result.rows[0];
 };
@@ -106,13 +106,14 @@ export const createTeacher = async ({ user_id, department_id, grade, status, spe
 /**
  * Mettre à jour un profil enseignant.
  */
-export const updateTeacher = async (id, { department_id, grade, status, speciality, contractual_hours }) => {
+export const updateTeacher = async (id, { department_id, grade, rank, status, speciality, contractual_hours }) => {
   const fields = [];
   const params = [];
   let paramIndex = 1;
 
   if (department_id !== undefined) { fields.push(`department_id = $${paramIndex++}`); params.push(department_id); }
   if (grade !== undefined) { fields.push(`grade = $${paramIndex++}`); params.push(grade); }
+  if (rank !== undefined) { fields.push(`rank = $${paramIndex++}`); params.push(rank); }
   if (status !== undefined) { fields.push(`status = $${paramIndex++}`); params.push(status); }
   if (speciality !== undefined) { fields.push(`speciality = $${paramIndex++}`); params.push(speciality); }
   if (contractual_hours !== undefined) { fields.push(`contractual_hours = $${paramIndex++}`); params.push(contractual_hours); }

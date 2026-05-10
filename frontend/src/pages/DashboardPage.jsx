@@ -7,7 +7,12 @@ import {
   getDashboardStats,
   getTeacherSummary,
   getDistributionChart,
+  getRecentHours,
+  exportTeacherPDF,
+  getDepartmentStats,
+  getProgramStats,
 } from '../api/auth';
+import toast from 'react-hot-toast';
 import './DashboardPage.css';
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -17,6 +22,7 @@ function getInitials(fn, ln) { return `${(fn||'')[0]||''}${(ln||'')[0]||''}`.toU
 
 const ROLE_BADGE = { admin: 'badge-danger', rh: 'badge-primary', enseignant: 'badge-success' };
 const ROLE_LABEL = { admin: 'Admin', rh: 'RH', enseignant: 'Enseignant' };
+const GRADE_BADGE = { assistant: 'badge-neutral', maitre_assistant: 'badge-primary', professeur: 'badge-warning', autres: 'badge-info' };
 
 /* ── KPI Card ────────────────────────────────────────────── */
 function KPICard({ label, value, sub, iconName, colorVar, index }) {
@@ -53,12 +59,12 @@ function SkeletonRow({ cols = 5 }) {
 }
 
 /* ── Distribution mini-chart ─────────────────────────────── */
-function DistBar({ label, pct, color }) {
+function DistBar({ label, pct, color, subLabel }) {
   return (
     <div className="dist-bar">
       <div className="dist-bar__header">
         <span className="dist-bar__label">{label}</span>
-        <span className="dist-bar__pct">{pct}%</span>
+        <span className="dist-bar__pct">{subLabel || `${pct}%`}</span>
       </div>
       <div className="dist-bar__track">
         <div className="dist-bar__fill" style={{ width: `${pct}%`, background: color }} />
@@ -74,8 +80,12 @@ export default function DashboardPage() {
 
   const [stats, setStats]         = useState(null);
   const [teachers, setTeachers]   = useState([]);
+  const [recentHours, setRecentHours] = useState([]);
   const [distrib, setDistrib]     = useState([]);
+  const [deptStats, setDeptStats] = useState([]);
+  const [progStats, setProgStats] = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError]         = useState(null);
 
   useEffect(() => {
@@ -84,17 +94,33 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         setError(null);
-        const [sRes, tRes, dRes] = await Promise.all([
+        
+        const results = await Promise.allSettled([
           getDashboardStats(),
           canManage ? getTeacherSummary() : Promise.resolve({ data: { teachers: [] } }),
           getDistributionChart(),
+          getRecentHours(5),
+          canManage ? getDepartmentStats() : Promise.resolve({ data: { data: [] } }),
+          canManage ? getProgramStats() : Promise.resolve({ data: { data: [] } }),
         ]);
+
         if (!active) return;
-        setStats(sRes.data);
-        setTeachers(tRes.data.teachers || []);
-        setDistrib(dRes.data.data || []);
+
+        // Process results
+        if (results[0].status === 'fulfilled') setStats(results[0].value.data);
+        else setError('Certaines statistiques n\'ont pas pu être chargées.');
+
+        if (results[1].status === 'fulfilled') setTeachers(results[1].value.data.teachers || []);
+        if (results[2].status === 'fulfilled') setDistrib(results[2].value.data.data || []);
+        if (results[3].status === 'fulfilled') {
+          const hData = results[3].value.data;
+          setRecentHours(hData.entries || hData.hours || []);
+        }
+        if (results[4].status === 'fulfilled') setDeptStats(results[4].value.data.data || []);
+        if (results[5].status === 'fulfilled') setProgStats(results[5].value.data.data || []);
+
       } catch (e) {
-        if (active) setError('Impossible de charger les données. Vérifiez la connexion.');
+        if (active) setError('Erreur critique lors du chargement du tableau de bord.');
       } finally {
         if (active) setLoading(false);
       }
@@ -103,10 +129,33 @@ export default function DashboardPage() {
     return () => { active = false; };
   }, [canManage]);
 
+  async function handleDownload() {
+    if (!user?.teacher_id) {
+      toast.error("Profil enseignant non trouvé");
+      return;
+    }
+    try {
+      setDownloading(true);
+      const res = await exportTeacherPDF(user.teacher_id);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `recapitulatif_${user.last_name}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Récapitulatif téléchargé');
+    } catch (err) {
+      toast.error('Erreur lors du téléchargement');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   /* Distribution % */
-  const totalDist = distrib.reduce((s, d) => s + parseFloat(d.total_hours || 0), 0);
-  const cmPct  = totalDist ? Math.round((distrib.find(d=>d.type==='CM')?.total_hours||0)/totalDist*100) : 0;
-  const tdPct  = totalDist ? Math.round((distrib.find(d=>d.type==='TD')?.total_hours||0)/totalDist*100) : 0;
+  const totalDist = distrib.reduce((s, d) => s + parseFloat(d.etd_hours || 0), 0);
+  const cmPct  = totalDist ? Math.round((distrib.find(d=>d.type==='CM')?.etd_hours||0)/totalDist*100) : 0;
+  const tdPct  = totalDist ? Math.round((distrib.find(d=>d.type==='TD')?.etd_hours||0)/totalDist*100) : 0;
   const tpPct  = 100 - cmPct - tdPct;
 
   return (
@@ -159,80 +208,144 @@ export default function DashboardPage() {
 
       {/* Charts + table */}
       <div className="dash-grid grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-        {/* Teacher table — admin/rh */}
-        {canManage && (
+        {/* Teacher table — admin/rh OR Personal recent hours — teacher */}
+        {(canManage || user?.role === 'enseignant') && (
           <div className="card dash-table-card p-0 overflow-hidden bg-white border border-[var(--border)] rounded-[var(--r-lg)] shadow-[var(--shadow-sm)]">
             <div className="dash-section-header flex items-center justify-between p-[16px_20px_12px] border-b border-[var(--border)]">
               <div>
-                <h3 className="dash-section-title text-[14px] font-bold">Récapitulatif enseignants</h3>
-                <p className="text-[12px] text-[var(--text-faint)]">{teachers.length} enseignant(s)</p>
+                <h3 className="dash-section-title text-[14px] font-bold">
+                  {canManage ? "Récapitulatif enseignants" : "Mes dernières séances"}
+                </h3>
+                <p className="text-[12px] text-[var(--text-faint)]">
+                  {canManage ? `${teachers.length} enseignant(s)` : `${recentHours.length} séance(s) récente(s)`}
+                </p>
               </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => navigate('/academia')}>
+              <button className="btn btn-secondary btn-sm" onClick={() => navigate(canManage ? '/academia' : '/Validation')}>
                 Voir tout
               </button>
             </div>
 
             <div className="data-table-wrap">
               <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Enseignant</th>
-                    <th>Grade / Statut</th>
-                    <th>Département</th>
-                    <th style={{ textAlign: 'right' }}>ETD total</th>
-                    <th style={{ textAlign: 'right' }}>Complémentaires</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading
-                    ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-                    : teachers.length === 0
-                    ? (
+                {canManage ? (
+                  <>
+                    <thead>
                       <tr>
-                        <td colSpan={5}>
-                          <div className="empty-state">
-                            <span className="material-symbols-outlined">group</span>
-                            <h4>Aucun enseignant répertorié</h4>
-                            <p>Ajoutez des enseignants via la gestion académique.</p>
-                          </div>
-                        </td>
+                        <th>Enseignant</th>
+                        <th>Grade / Statut</th>
+                        <th>Département</th>
+                        <th style={{ textAlign: 'right' }}>ETD total</th>
+                        <th style={{ textAlign: 'right' }}>Complémentaires</th>
                       </tr>
-                    )
-                    : teachers.map((t, i) => (
-                      <motion.tr
-                        key={t.teacher_id ?? i}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 + i * 0.05 }}
-                        className="hover:bg-[var(--surface-2)] transition-colors"
-                      >
-                        <td className="p-3 border-b border-[var(--border)]">
-                          <div className="flex items-center gap-2.5">
-                            <div className="teacher-avatar w-[30px] h-[30px] rounded-full bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center text-[11px] font-bold shrink-0">{getInitials(t.first_name, t.last_name)}</div>
-                            <div>
-                              <div className="font-semibold text-[13px]">{t.first_name} {t.last_name}</div>
-                              <div className="text-[11px] text-[var(--text-faint)]">{t.department_name || '—'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3 border-b border-[var(--border)]">
-                          <div className="text-[12px]">
-                            <span className="capitalize">{(t.grade||'').replace('_',' ')}</span>
-                            <span className="badge badge-neutral ml-1.5">{t.status}</span>
-                          </div>
-                        </td>
-                        <td className="p-3 border-b border-[var(--border)] text-[12px] text-[var(--text-muted)]">{t.department_name || '—'}</td>
-                        <td className="p-3 border-b border-[var(--border)] text-right font-semibold">{fmt(t.total_etd)} h</td>
-                        <td className="p-3 border-b border-[var(--border)] text-right">
-                          {parseFloat(t.complementary_etd || 0) > 0
-                            ? <span className="badge badge-warning">{fmt(t.complementary_etd)} h</span>
-                            : <span className="text-[var(--text-faint)] text-[12px]">—</span>
-                          }
-                        </td>
-                      </motion.tr>
-                    ))
-                  }
-                </tbody>
+                    </thead>
+                    <tbody>
+                      {loading
+                        ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                        : teachers.length === 0
+                        ? (
+                          <tr>
+                            <td colSpan={5}>
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">group</span>
+                                <h4>Aucun enseignant répertorié</h4>
+                                <p>Ajoutez des enseignants via la gestion académique.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                        : teachers.map((t, i) => (
+                          <motion.tr
+                            key={t.teacher_id ?? i}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.2 + i * 0.05 }}
+                            className="hover:bg-[var(--surface-2)] transition-colors"
+                          >
+                            <td className="p-3 border-b border-[var(--border)]">
+                              <div className="flex items-center gap-2.5">
+                                <div className="teacher-avatar w-[30px] h-[30px] rounded-full bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center text-[11px] font-bold shrink-0">{getInitials(t.first_name, t.last_name)}</div>
+                                <div>
+                                  <div className="font-semibold text-[13px]">{t.first_name} {t.last_name}</div>
+                                  <div className="text-[11px] text-[var(--text-faint)]">{t.department_name || '—'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)]">
+                              <div className="text-[12px]">
+                                <span className={`capitalize badge ${GRADE_BADGE[t.grade] || 'badge-neutral'}`}>{(t.grade||'').replace('_',' ')}</span>
+                                <span className="badge badge-neutral ml-1.5">{t.status}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)] text-[12px] text-[var(--text-muted)]">{t.department_name || '—'}</td>
+                            <td className="p-3 border-b border-[var(--border)] text-right font-semibold">{fmt(t.total_etd)} h</td>
+                            <td className="p-3 border-b border-[var(--border)] text-right">
+                              {parseFloat(t.complementary_etd || 0) > 0
+                                ? <span className="badge badge-warning">{fmt(t.complementary_etd)} h</span>
+                                : <span className="text-[var(--text-faint)] text-[12px]">—</span>
+                              }
+                            </td>
+                          </motion.tr>
+                        ))
+                      }
+                    </tbody>
+                  </>
+                ) : (
+                  <>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Matière</th>
+                        <th style={{ textAlign: 'center' }}>Type</th>
+                        <th style={{ textAlign: 'right' }}>ETD</th>
+                        <th>Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading
+                        ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
+                        : recentHours.length === 0
+                        ? (
+                          <tr>
+                            <td colSpan={5}>
+                              <div className="empty-state">
+                                <span className="material-symbols-outlined">history</span>
+                                <h4>Aucune séance</h4>
+                                <p>Vos séances apparaîtront ici dès qu'elles seront saisies.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                        : recentHours.map((h, i) => (
+                          <motion.tr
+                            key={h.id ?? i}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.2 + i * 0.05 }}
+                            className="hover:bg-[var(--surface-2)] transition-colors"
+                          >
+                            <td className="p-3 border-b border-[var(--border)] text-[12px]">
+                              {new Date(h.date).toLocaleDateString('fr-FR')}
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)] text-[13px] font-medium">
+                              {h.subject_name || '—'}
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)] text-center">
+                              <span className="badge badge-neutral">{h.type}</span>
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)] text-right font-semibold">
+                              {fmt(h.etd_hours)} h
+                            </td>
+                            <td className="p-3 border-b border-[var(--border)]">
+                              {h.status === 'validated' && <span className="badge badge-success">Validé</span>}
+                              {h.status === 'pending' && <span className="badge badge-warning">En attente</span>}
+                              {h.status === 'contested' && <span className="badge badge-danger">Contesté</span>}
+                            </td>
+                          </motion.tr>
+                        ))
+                      }
+                    </tbody>
+                  </>
+                )}
               </table>
             </div>
           </div>
@@ -264,6 +377,49 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* New Charts: Department & Programs (for admin/rh) */}
+          {canManage && (
+            <>
+              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
+                <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Heures par département</h3>
+                {loading ? (
+                  <div className="flex flex-col gap-3">
+                    {[1, 2].map(i => <div key={i} className="skeleton h-9 rounded-lg" style={{ width: '100%' }} />)}
+                  </div>
+                ) : deptStats.length === 0 ? (
+                  <div className="text-[12px] text-center py-4 text-[var(--text-faint)]">Aucune donnée</div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {deptStats.map((d, i) => {
+                      const max = Math.max(...deptStats.map(x => parseFloat(x.total_etd)));
+                      const pct = Math.round((parseFloat(d.total_etd) / (max || 1)) * 100);
+                      return <DistBar key={i} label={d.name} pct={pct} color="#6366f1" subLabel={`${fmt(d.total_etd)} h ETD`} />;
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
+                <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Top filières (heures)</h3>
+                {loading ? (
+                  <div className="flex flex-col gap-3">
+                    {[1, 2, 3].map(i => <div key={i} className="skeleton h-9 rounded-lg" style={{ width: '100%' }} />)}
+                  </div>
+                ) : progStats.length === 0 ? (
+                  <div className="text-[12px] text-center py-4 text-[var(--text-faint)]">Aucune donnée</div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {progStats.slice(0, 5).map((p, i) => {
+                      const max = Math.max(...progStats.map(x => parseFloat(x.total_etd)));
+                      const pct = Math.round((parseFloat(p.total_etd) / (max || 1)) * 100);
+                      return <DistBar key={i} label={`${p.name} (${p.level})`} pct={pct} color="#f59e0b" subLabel={`${fmt(p.total_etd)} h`} />;
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Quick actions */}
           <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
             <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Actions rapides</h3>
@@ -273,11 +429,16 @@ export default function DashboardPage() {
                 <span className="material-symbols-outlined text-[16px]">add</span>
                 Saisir des heures
               </button>
-              {canManage && (
+              <button className="btn btn-secondary !justify-start"
+                onClick={() => navigate('/Validation')}>
+                <span className="material-symbols-outlined text-[16px]">rule_folder</span>
+                {canManage ? "Valider les heures" : "Vérifier mes heures"}
+              </button>
+              {user?.role === 'enseignant' && (
                 <button className="btn btn-secondary !justify-start"
-                  onClick={() => navigate('/Validation')}>
-                  <span className="material-symbols-outlined text-[16px]">rule_folder</span>
-                  Valider les heures
+                  onClick={handleDownload} disabled={downloading}>
+                  <span className="material-symbols-outlined text-[16px]">download</span>
+                  {downloading ? 'Téléchargement…' : 'Télécharger mon récapitulatif'}
                 </button>
               )}
               {canManage && (
