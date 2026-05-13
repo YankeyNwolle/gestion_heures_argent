@@ -9,8 +9,10 @@ import {
   getDistributionChart,
   getRecentHours,
   exportTeacherPDF,
+  exportTeacherExcel,
   getDepartmentStats,
   getProgramStats,
+  getMyUEs,
 } from '../api/auth';
 import toast from 'react-hot-toast';
 import './DashboardPage.css';
@@ -20,56 +22,64 @@ function fmt(n) { return (n ?? 0).toLocaleString('fr-FR', { maximumFractionDigit
 function fmtCFA(n) { return (n ?? 0).toLocaleString('fr-FR') + ' FCFA'; }
 function getInitials(fn, ln) { return `${(fn||'')[0]||''}${(ln||'')[0]||''}`.toUpperCase() || '?'; }
 
-const ROLE_BADGE = { admin: 'badge-danger', rh: 'badge-primary', enseignant: 'badge-success' };
-const ROLE_LABEL = { admin: 'Admin', rh: 'RH', enseignant: 'Enseignant' };
 const GRADE_BADGE = { assistant: 'badge-neutral', maitre_assistant: 'badge-primary', professeur: 'badge-warning', autres: 'badge-info' };
+const TYPE_COLORS  = { CM: '#6366f1', TD: '#f59e0b', TP: '#22c55e' };
 
 /* ── KPI Card ────────────────────────────────────────────── */
 function KPICard({ label, value, sub, iconName, colorVar, index }) {
   return (
-    <motion.div
+    <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.4 }}
-      whileHover={{ y: -4, boxShadow: '0 12px 24px rgba(13, 71, 161, 0.15)' }}
-      className="kpi-card relative overflow-hidden bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-[18px_20px] transition-colors hover:border-[var(--border-hover)]"
+      transition={{ delay: index * 0.1 }}
+      className="card kpi-card p-6 border border-[var(--border)] rounded-[var(--r-lg)] bg-white shadow-[var(--shadow-sm)]"
     >
-      <div
-        className="kpi-card__icon absolute right-4 top-4 w-9 h-9 rounded-[var(--r-md)] flex items-center justify-center text-lg"
-        style={{ background: `${colorVar}20`, color: colorVar }}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{iconName}</span>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{label}</p>
+          <h2 className="text-[26px] font-black text-[var(--text-main)] leading-none">{value}</h2>
+        </div>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--surface-2)]" style={{ color: colorVar }}>
+          <span className="material-symbols-outlined text-[22px]">{iconName}</span>
+        </div>
       </div>
-      <div className="kpi-card__label text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-[0.06em] mb-1.5">{label}</div>
-      <div className="kpi-card__value text-[26px] font-extrabold text-[var(--text)] leading-none mb-1">{value}</div>
-      {sub && <div className="kpi-card__sub text-[11px] text-[var(--text-faint)]">{sub}</div>}
+      <div className="mt-4">
+        <span className="text-[12px] font-medium text-[var(--text-faint)]">{sub}</span>
+      </div>
     </motion.div>
   );
 }
 
-/* ── Skeleton ────────────────────────────────────────────── */
-function SkeletonRow({ cols = 5 }) {
+/* ── DistBar ─────────────────────────────────────────────── */
+function DistBar({ label, pct, color, subLabel }) {
   return (
-    <tr>
-      {Array.from({ length: cols }).map((_, i) => (
-        <td key={i}><div className="skeleton" style={{ height: 14, width: '80%', borderRadius: 4 }} /></td>
-      ))}
-    </tr>
+    <div className="dist-bar mb-4">
+      <div className="dist-bar__header">
+        <span className="dist-bar__label">{label}</span>
+        <span className="dist-bar__pct" style={{ color }}>{subLabel || `${pct}%`}</span>
+      </div>
+      <div className="dist-bar__track">
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 1 }}
+          className="dist-bar__fill" 
+          style={{ backgroundColor: color }} 
+        />
+      </div>
+    </div>
   );
 }
 
-/* ── Distribution mini-chart ─────────────────────────────── */
-function DistBar({ label, pct, color, subLabel }) {
+function SkeletonRow({ cols }) {
   return (
-    <div className="dist-bar">
-      <div className="dist-bar__header">
-        <span className="dist-bar__label">{label}</span>
-        <span className="dist-bar__pct">{subLabel || `${pct}%`}</span>
-      </div>
-      <div className="dist-bar__track">
-        <div className="dist-bar__fill" style={{ width: `${pct}%`, background: color }} />
-      </div>
-    </div>
+    <tr>
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i} className="p-3 border-b border-[var(--border)]">
+          <div className="skeleton h-4 w-full rounded" />
+        </td>
+      ))}
+    </tr>
   );
 }
 
@@ -78,49 +88,52 @@ export default function DashboardPage() {
   const { user, isAdmin, canManage } = useAuth();
   const navigate = useNavigate();
 
-  const [stats, setStats]         = useState(null);
+  const [stats, setStats]         = useState({ 
+    totalEtd: 0, 
+    complementaryHours: 0, 
+    amountDue: 0, 
+    potentialAmount: 0, 
+    teacherCount: 0, 
+    contestedCount: 0 
+  });
   const [teachers, setTeachers]   = useState([]);
   const [recentHours, setRecentHours] = useState([]);
   const [distrib, setDistrib]     = useState([]);
+  const [myUEs, setMyUEs]         = useState([]);
   const [deptStats, setDeptStats] = useState([]);
   const [progStats, setProgStats] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [downloading, setDownloading] = useState(false);
-  const [error, setError]         = useState(null);
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
         setLoading(true);
-        setError(null);
-        
         const results = await Promise.allSettled([
           getDashboardStats(),
           canManage ? getTeacherSummary() : Promise.resolve({ data: { teachers: [] } }),
           getDistributionChart(),
-          getRecentHours(5),
-          canManage ? getDepartmentStats() : Promise.resolve({ data: { data: [] } }),
-          canManage ? getProgramStats() : Promise.resolve({ data: { data: [] } }),
+          getRecentHours(10), // On en prend un peu plus pour la vue enseignant
+          !canManage ? getMyUEs() : Promise.resolve({ data: { ues: [] } }),
+          canManage ? getDepartmentStats() : Promise.resolve({ data: [] }),
+          canManage ? getProgramStats() : Promise.resolve({ data: [] }),
         ]);
 
         if (!active) return;
 
-        // Process results
-        if (results[0].status === 'fulfilled') setStats(results[0].value.data);
-        else setError('Certaines statistiques n\'ont pas pu être chargées.');
-
-        if (results[1].status === 'fulfilled') setTeachers(results[1].value.data.teachers || []);
-        if (results[2].status === 'fulfilled') setDistrib(results[2].value.data.data || []);
+        if (results[0].status === 'fulfilled') setStats(results[0].value?.data);
+        if (results[1].status === 'fulfilled') setTeachers(results[1].value?.data?.teachers || []);
+        if (results[2].status === 'fulfilled') setDistrib(results[2].value?.data?.data || []);
         if (results[3].status === 'fulfilled') {
-          const hData = results[3].value.data;
-          setRecentHours(hData.entries || hData.hours || []);
+          const hData = results[3].value?.data;
+          setRecentHours(hData?.entries || hData?.hours || []);
         }
-        if (results[4].status === 'fulfilled') setDeptStats(results[4].value.data.data || []);
-        if (results[5].status === 'fulfilled') setProgStats(results[5].value.data.data || []);
-
+        if (results[4]?.status === 'fulfilled') setMyUEs(results[4].value?.data?.ues || []);
+        if (results[5]?.status === 'fulfilled') setDeptStats(results[5].value?.data?.data || []);
+        if (results[6]?.status === 'fulfilled') setProgStats(results[6].value?.data?.data || []);
       } catch (e) {
-        if (active) setError('Erreur critique lors du chargement du tableau de bord.');
+        console.error(e);
       } finally {
         if (active) setLoading(false);
       }
@@ -152,311 +165,327 @@ export default function DashboardPage() {
     }
   }
 
-  /* Distribution % */
   const totalDist = distrib.reduce((s, d) => s + parseFloat(d.etd_hours || 0), 0);
   const cmPct  = totalDist ? Math.round((distrib.find(d=>d.type==='CM')?.etd_hours||0)/totalDist*100) : 0;
   const tdPct  = totalDist ? Math.round((distrib.find(d=>d.type==='TD')?.etd_hours||0)/totalDist*100) : 0;
-  const tpPct  = 100 - cmPct - tdPct;
+  const tpPct  = totalDist ? 100 - cmPct - tdPct : 0;
 
   return (
-    <Layout
-      title="Tableau de bord"
-      subtitle={`Année académique ${stats?.academicYear || '…'} — Vue globale des indicateurs`}
-    >
-      {error && (
-        <div className="dash-alert">
-          <span className="material-symbols-outlined">warning</span>
-          {error}
-        </div>
+    <Layout title="Tableau de bord" subtitle={`Année académique ${stats?.academicYear || '…'}`}>
+      {canManage && stats?.contestedCount > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="contested-alert" 
+          onClick={() => navigate('/Validation', { state: { filter: 'contested' } })}
+        >
+          <span className="material-symbols-outlined text-[50px] font-bold">report</span>
+          <div className="flex-1">
+            <h2>{stats.contestedCount} SÉANCE(S) CONTESTÉE(S) EN ATTENTE</h2>
+            <p>Action requise : Des corrections sont nécessaires pour débloquer les calculs de paie.</p>
+          </div>
+          <button className="contested-btn">Traiter maintenant</button>
+        </motion.div>
       )}
 
-      {/* KPIs */}
-      <div className="kpi-grid grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3.5 mb-6">
-        <KPICard
-          index={0}
-          label="Total ETD"
-          value={loading ? '—' : `${fmt(stats?.totalEtd)} h`}
-          sub="Heures équivalent TD"
-          iconName="schedule"
-          colorVar="#6366f1"
-        />
-        <KPICard
-          index={1}
-          label="Heures complémentaires"
-          value={loading ? '—' : `${fmt(stats?.complementaryHours)} h`}
-          sub="Au-delà du service"
-          iconName="add_circle"
-          colorVar="#f59e0b"
-        />
-        <KPICard
-          index={2}
-          label="Montant à régler"
-          value={loading ? '—' : fmtCFA(stats?.amountDue)}
-          sub="Heures complémentaires"
-          iconName="payments"
-          colorVar="#22c55e"
-        />
-        <KPICard
-          index={3}
-          label="Dépassements"
-          value={loading ? '—' : (stats?.teachersOverLimit ?? 0)}
-          sub={`sur ${stats?.teacherCount ?? 0} enseignants`}
-          iconName="warning"
-          colorVar="#ef4444"
-        />
+      <div className="kpi-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <KPICard index={0} label={canManage ? "Total ETD" : "Mon ETD"} value={loading ? '—' : `${fmt(stats?.totalEtd)} h`} sub="Heures équivalent TD" iconName="schedule" colorVar="#6366f1" />
+        <KPICard index={1} label="Complémentaires" value={loading ? '—' : `${fmt(stats?.complementaryHours)} h`} sub="Heures à régler" iconName="add_circle" colorVar="#f59e0b" />
+        <KPICard index={2} label={canManage ? "Montant à régler" : "Mon Montant Dû"} value={loading ? '—' : fmtCFA(stats?.amountDue)} sub="Budget prévisionnel" iconName="payments" colorVar="#22c55e" />
+        <KPICard index={3} label={canManage ? "Dépassements" : "Mes Alertes"} value={loading ? '—' : (canManage ? (stats?.teachersOverLimit ?? 0) : (stats?.contestedCount ?? 0))} sub={canManage ? `sur ${stats?.teacherCount ?? 0} profs` : "Séances à corriger"} iconName="warning" colorVar="#64748b" />
       </div>
 
-      {/* Charts + table */}
-      <div className="dash-grid grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-        {/* Teacher table — admin/rh OR Personal recent hours — teacher */}
-        {(canManage || user?.role === 'enseignant') && (
-          <div className="card dash-table-card p-0 overflow-hidden bg-white border border-[var(--border)] rounded-[var(--r-lg)] shadow-[var(--shadow-sm)]">
-            <div className="dash-section-header flex items-center justify-between p-[16px_20px_12px] border-b border-[var(--border)]">
-              <div>
-                <h3 className="dash-section-title text-[14px] font-bold">
-                  {canManage ? "Récapitulatif enseignants" : "Mes dernières séances"}
-                </h3>
-                <p className="text-[12px] text-[var(--text-faint)]">
-                  {canManage ? `${teachers.length} enseignant(s)` : `${recentHours.length} séance(s) récente(s)`}
-                </p>
-              </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => navigate(canManage ? '/academia' : '/Validation')}>
-                Voir tout
-              </button>
+      <div className="dash-grid">
+        <div className="card dash-table-card bg-white border border-[var(--border)] rounded-[var(--r-lg)] shadow-[var(--shadow-sm)]">
+          {canManage && (
+            <div className="dash-section-header">
+              <h3 className="dash-section-title text-[16px] font-bold text-[#1e293b]">
+                <span className="material-symbols-outlined" style={{ verticalAlign: 'middle', marginRight: '8px', color: 'var(--primary)' }}>history</span>
+                Récapitulatif des enseignants
+              </h3>
+              <button className="btn btn-ghost btn-sm text-[var(--primary)]" onClick={() => navigate('/academia')}>Voir tout</button>
             </div>
+          )}
 
-            <div className="data-table-wrap">
-              <table className="data-table">
-                {canManage ? (
-                  <>
-                    <thead>
-                      <tr>
-                        <th>Enseignant</th>
-                        <th>Grade / Statut</th>
-                        <th>Département</th>
-                        <th style={{ textAlign: 'right' }}>ETD total</th>
-                        <th style={{ textAlign: 'right' }}>Complémentaires</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading
-                        ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-                        : teachers.length === 0
-                        ? (
-                          <tr>
-                            <td colSpan={5}>
-                              <div className="empty-state">
-                                <span className="material-symbols-outlined">group</span>
-                                <h4>Aucun enseignant répertorié</h4>
-                                <p>Ajoutez des enseignants via la gestion académique.</p>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                        : teachers.map((t, i) => (
-                          <motion.tr
-                            key={t.teacher_id ?? i}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.2 + i * 0.05 }}
-                            className="hover:bg-[var(--surface-2)] transition-colors"
+          <div className="overflow-x-auto">
+            {canManage ? (
+              <table className="w-full text-[13px] dash-table">
+                <thead>
+                  <tr className="bg-[#fcfdfe] border-b-2 border-[#f1f5f9]">
+                    <th className="p-5 text-left text-[11px] font-black text-[#64748b] uppercase tracking-[2px] col-enseignant">Enseignant</th>
+                    <th className="p-5 text-left text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-grade">Grade</th>
+                    <th className="p-5 text-left text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-statut">Statut</th>
+                    <th className="p-5 text-right text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-etd">ETD Total</th>
+                    <th className="p-5 text-right text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-surplus">Surplus</th>
+                    <th className="p-5 text-right text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-montant">Montant Dû</th>
+                    <th className="p-5 text-right text-[11px] font-black text-[#64748b] uppercase tracking-[2px] border-l border-[#f1f5f9] col-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f1f5f9]">
+                  {loading ? Array.from({length:5}).map((_,i)=><SkeletonRow key={i} cols={7}/>) : teachers.map((t,i)=>(
+                    <motion.tr 
+                      key={i} 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="group hover:bg-[#f8faff] transition-colors"
+                    >
+                      <td className="p-5 align-middle col-enseignant">
+                        <span className="font-extrabold text-[#1e293b] text-[15px]">{t.first_name} {t.last_name}</span>
+                      </td>
+                      <td className="p-5 align-middle border-l border-[#f8fafc] col-grade">
+                        <span className={`badge ${GRADE_BADGE[t.grade]||'badge-neutral'} !rounded-md px-3 py-1 font-bold`}>{t.grade}</span>
+                      </td>
+                      <td className="p-5 align-middle border-l border-[#f8fafc] col-statut">
+                        <span className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest">{t.status}</span>
+                      </td>
+                      <td className="p-5 align-middle text-right border-l border-[#f8fafc] col-etd">
+                        <span className="text-[15px] font-black text-[#475569]">{fmt(t.total_etd)} h</span>
+                      </td>
+                      <td className="p-5 align-middle text-right border-l border-[#f8fafc] col-surplus">
+                        {parseFloat(t.complementary_etd||0) > 0 ? (
+                          <span className="bg-[#fff7ed] text-[#ea580c] px-3 py-1 rounded-full font-black text-[12px]">{fmt(t.complementary_etd)} h</span>
+                        ) : (
+                          <span className="text-[#e2e8f0]">0 h</span>
+                        )}
+                      </td>
+                      <td className="p-5 align-middle text-right border-l border-[#f8fafc] col-montant">
+                        {parseInt(t.amount_due||0) > 0 ? (
+                          <span className="text-[#10b981] font-black text-[16px]">{fmtCFA(t.amount_due)}</span>
+                        ) : (
+                          <span className="text-[#e2e8f0]">0 FCFA</span>
+                        )}
+                      </td>
+                      <td className="p-5 align-middle text-right border-l border-[#f8fafc] col-actions">
+                        <div className="actions-row">
+                          <button 
+                            className="btn-action-sm shadow-md"
+                            style={{ backgroundColor: '#dc2626', color: 'white' }}
+                            onClick={async () => {
+                               const res = await exportTeacherPDF(t.teacher_id);
+                               const url = window.URL.createObjectURL(new Blob([res.data]));
+                               const link = document.createElement('a');
+                               link.href = url;
+                               link.setAttribute('download', `fiche_${t.last_name}.pdf`);
+                               document.body.appendChild(link);
+                               link.click();
+                               link.remove();
+                            }}
+                            title="Exporter en PDF"
                           >
-                            <td className="p-3 border-b border-[var(--border)]">
-                              <div className="flex items-center gap-2.5">
-                                <div className="teacher-avatar w-[30px] h-[30px] rounded-full bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center text-[11px] font-bold shrink-0">{getInitials(t.first_name, t.last_name)}</div>
-                                <div>
-                                  <div className="font-semibold text-[13px]">{t.first_name} {t.last_name}</div>
-                                  <div className="text-[11px] text-[var(--text-faint)]">{t.department_name || '—'}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)]">
-                              <div className="text-[12px]">
-                                <span className={`capitalize badge ${GRADE_BADGE[t.grade] || 'badge-neutral'}`}>{(t.grade||'').replace('_',' ')}</span>
-                                <span className="badge badge-neutral ml-1.5">{t.status}</span>
-                              </div>
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)] text-[12px] text-[var(--text-muted)]">{t.department_name || '—'}</td>
-                            <td className="p-3 border-b border-[var(--border)] text-right font-semibold">{fmt(t.total_etd)} h</td>
-                            <td className="p-3 border-b border-[var(--border)] text-right">
-                              {parseFloat(t.complementary_etd || 0) > 0
-                                ? <span className="badge badge-warning">{fmt(t.complementary_etd)} h</span>
-                                : <span className="text-[var(--text-faint)] text-[12px]">—</span>
-                              }
-                            </td>
-                          </motion.tr>
-                        ))
-                      }
-                    </tbody>
-                  </>
-                ) : (
-                  <>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Matière</th>
-                        <th style={{ textAlign: 'center' }}>Type</th>
-                        <th style={{ textAlign: 'right' }}>ETD</th>
-                        <th>Statut</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading
-                        ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
-                        : recentHours.length === 0
-                        ? (
-                          <tr>
-                            <td colSpan={5}>
-                              <div className="empty-state">
-                                <span className="material-symbols-outlined">history</span>
-                                <h4>Aucune séance</h4>
-                                <p>Vos séances apparaîtront ici dès qu'elles seront saisies.</p>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                        : recentHours.map((h, i) => (
-                          <motion.tr
-                            key={h.id ?? i}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.2 + i * 0.05 }}
-                            className="hover:bg-[var(--surface-2)] transition-colors"
+                            <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                          </button>
+                          <button 
+                            className="btn-action-sm shadow-md"
+                            style={{ backgroundColor: '#16a34a', color: 'white' }}
+                            onClick={async () => {
+                               const res = await exportTeacherExcel(t.teacher_id);
+                               const url = window.URL.createObjectURL(new Blob([res.data]));
+                               const link = document.createElement('a');
+                               link.href = url;
+                               link.setAttribute('download', `recap_${t.last_name}.xlsx`);
+                               document.body.appendChild(link);
+                               link.click();
+                               link.remove();
+                            }}
+                            title="Exporter en Excel"
                           >
-                            <td className="p-3 border-b border-[var(--border)] text-[12px]">
-                              {new Date(h.date).toLocaleDateString('fr-FR')}
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)] text-[13px] font-medium">
-                              {h.subject_name || '—'}
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)] text-center">
-                              <span className="badge badge-neutral">{h.type}</span>
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)] text-right font-semibold">
-                              {fmt(h.etd_hours)} h
-                            </td>
-                            <td className="p-3 border-b border-[var(--border)]">
-                              {h.status === 'validated' && <span className="badge badge-success">Validé</span>}
-                              {h.status === 'pending' && <span className="badge badge-warning">En attente</span>}
-                              {h.status === 'contested' && <span className="badge badge-danger">Contesté</span>}
-                            </td>
-                          </motion.tr>
-                        ))
-                      }
-                    </tbody>
-                  </>
-                )}
+                            <span className="material-symbols-outlined text-[20px]">table_view</span>
+                          </button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* Right column */}
-        <div className="dash-right-col flex flex-col gap-4">
-          {/* Distribution chart */}
-          <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
-            <div className="dash-section-header flex items-center justify-between mb-3.5">
-              <h3 className="dash-section-title text-[14px] font-bold">Répartition CM / TD / TP</h3>
-            </div>
-
-            {loading ? (
-              <div className="flex flex-col gap-3">
-                {[80, 60, 40].map((w, i) => <div key={i} className="skeleton h-9 rounded-lg" style={{ width: `${w}%` }} />)}
-              </div>
-            ) : totalDist === 0 ? (
-              <div className="empty-state py-6 flex flex-col items-center text-center gap-3">
-                <span className="material-symbols-outlined text-[40px] text-[var(--text-faint)] opacity-70">bar_chart</span>
-                <h4 className="text-[14px] font-medium text-[var(--text-muted)]">Aucune heure saisie</h4>
-              </div>
             ) : (
-              <div className="flex flex-col gap-3 mt-1">
-                <DistBar label="CM (Cours Magistral)" pct={cmPct} color="#6366f1" />
-                <DistBar label="TD (Travaux Dirigés)"  pct={tdPct} color="#f59e0b" />
-                <DistBar label="TP (Travaux Pratiques)" pct={tpPct} color="#22c55e" />
+              <div className="p-8">
+                {/* --- Dashboard Minimaliste --- */}
+                <div className="space-y-6">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <p style={{ fontSize: '11px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>
+                        {user?.grade?.replace('_', ' ')} {user?.status}
+                      </p>
+                      <p style={{ fontSize: '15px', color: '#059669', fontWeight: '900', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>payments</span>
+                        Valeur estimée : {new Intl.NumberFormat('fr-FR').format(stats?.potentialAmount || 0)} FCFA
+                      </p>
+                    </div>
+                    <button 
+                      className="btn"
+                      onClick={handleDownload}
+                      disabled={downloading}
+                      style={{ 
+                        background: '#1e293b', 
+                        color: 'white', 
+                        fontSize: '12px', 
+                        fontWeight: '700', 
+                        padding: '10px 20px', 
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        border: 'none',
+                        cursor: downloading ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>download</span>
+                      {downloading ? 'Génération...' : 'Télécharger mon récapitulatif'}
+                    </button>
+                  </div>
+
+                  <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b' }}>Mes dernières séances</h3>
+                      <button onClick={() => navigate('/Validation')} style={{ fontSize: '12px', fontWeight: '700', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>Historique complet</button>
+                    </div>
+                    <div className="data-table-wrap">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Matière</th>
+                            <th>Type</th>
+                            <th style={{ textAlign: 'right' }}>ETD</th>
+                            <th>Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentHours.length > 0 ? recentHours.map((h, i) => (
+                            <tr key={i}>
+                              <td style={{ fontSize: '12px', color: '#64748b' }}>{new Date(h.date).toLocaleDateString('fr-FR')}</td>
+                              <td style={{ fontSize: '13px', fontWeight: '600' }}>{h.subject_name || h.subject}</td>
+                              <td>
+                                <span className="badge" style={{ background: `${TYPE_COLORS[h.type] || '#ccc'}15`, color: TYPE_COLORS[h.type] || '#666', fontSize: '10px' }}>{h.type}</span>
+                              </td>
+                              <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: '700' }}>{fmt(h.etd_hours || h.hours)} h</td>
+                              <td>
+                                <span className={`badge ${h.status === 'validated' ? 'badge-success' : h.status === 'contested' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: '10px' }}>
+                                  {h.status === 'validated' ? 'Validée' : h.status === 'contested' ? 'Contestée' : 'En attente'}
+                                </span>
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8', fontStyle: 'italic' }}>Aucune séance récente</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="material-symbols-outlined" style={{ color: 'var(--primary)', fontSize: '20px' }}>library_books</span>
+                        Mes Unités d'Enseignement (UE)
+                      </h3>
+                      <span className="badge badge-neutral" style={{ fontSize: '10px' }}>{myUEs.length} total</span>
+                    </div>
+                    <div className="data-table-wrap">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>Nom de l'UE</th>
+                            <th style={{ textAlign: 'center' }}>Niveau</th>
+                            <th>Département</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myUEs.length > 0 ? myUEs.map((ue, idx) => (
+                            <tr key={idx}>
+                              <td>
+                                <span className="text-[11px] font-black text-[var(--primary)] bg-[#6366f110] px-2 py-0.5 rounded">
+                                  {ue.code || '—'}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>{ue.name}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span className={`badge ue-level-${ue.level || 'L1'}`} style={{ fontSize: '10px', minWidth: '40px' }}>
+                                  {ue.level}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: '12px', color: '#64748b' }}>{ue.department_name}</td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                Aucune UE enregistrée pour le moment.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
+        </div>
 
-          {/* New Charts: Department & Programs (for admin/rh) */}
-          {canManage && (
-            <>
-              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
-                <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Heures par département</h3>
-                {loading ? (
-                  <div className="flex flex-col gap-3">
-                    {[1, 2].map(i => <div key={i} className="skeleton h-9 rounded-lg" style={{ width: '100%' }} />)}
-                  </div>
-                ) : deptStats.length === 0 ? (
-                  <div className="text-[12px] text-center py-4 text-[var(--text-faint)]">Aucune donnée</div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {deptStats.map((d, i) => {
-                      const max = Math.max(...deptStats.map(x => parseFloat(x.total_etd)));
-                      const pct = Math.round((parseFloat(d.total_etd) / (max || 1)) * 100);
-                      return <DistBar key={i} label={d.name} pct={pct} color="#6366f1" subLabel={`${fmt(d.total_etd)} h ETD`} />;
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
-                <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Top filières (heures)</h3>
-                {loading ? (
-                  <div className="flex flex-col gap-3">
-                    {[1, 2, 3].map(i => <div key={i} className="skeleton h-9 rounded-lg" style={{ width: '100%' }} />)}
-                  </div>
-                ) : progStats.length === 0 ? (
-                  <div className="text-[12px] text-center py-4 text-[var(--text-faint)]">Aucune donnée</div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {progStats.slice(0, 5).map((p, i) => {
-                      const max = Math.max(...progStats.map(x => parseFloat(x.total_etd)));
-                      const pct = Math.round((parseFloat(p.total_etd) / (max || 1)) * 100);
-                      return <DistBar key={i} label={`${p.name} (${p.level})`} pct={pct} color="#f59e0b" subLabel={`${fmt(p.total_etd)} h`} />;
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Quick actions */}
-          <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-5">
-            <h3 className="dash-section-title text-[14px] font-bold mb-3.5">Actions rapides</h3>
+        <div className="dash-right-col">
+          <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow-sm)]">
+            <h3 className="dash-section-title mb-6">Répartition des heures</h3>
             <div className="flex flex-col gap-2">
-              <button className="btn btn-secondary !justify-start"
-                onClick={() => navigate('/saisieheures')}>
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                Saisir des heures
+              <DistBar label="CM (Cours Magistral)" pct={cmPct} color="#6366f1" />
+              <DistBar label="TD (Travaux Dirigés)"  pct={tdPct} color="#f59e0b" />
+              <DistBar label="TP (Travaux Pratiques)" pct={tpPct} color="#22c55e" />
+            </div>
+          </div>
+
+          <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow-sm)]">
+            <h3 className="dash-section-title mb-4">Actions rapides</h3>
+            <div className="flex flex-col gap-2">
+              <button className="btn btn-secondary !justify-start py-3" onClick={() => navigate('/saisieheures')}>
+                <span className="material-symbols-outlined text-[20px] mr-3">add</span> Saisir des heures
               </button>
-              <button className="btn btn-secondary !justify-start"
-                onClick={() => navigate('/Validation')}>
-                <span className="material-symbols-outlined text-[16px]">rule_folder</span>
-                {canManage ? "Valider les heures" : "Vérifier mes heures"}
-              </button>
-              {user?.role === 'enseignant' && (
-                <button className="btn btn-secondary !justify-start"
-                  onClick={handleDownload} disabled={downloading}>
-                  <span className="material-symbols-outlined text-[16px]">download</span>
-                  {downloading ? 'Téléchargement…' : 'Télécharger mon récapitulatif'}
-                </button>
-              )}
               {canManage && (
-                <button className="btn btn-secondary !justify-start"
-                  onClick={() => navigate('/rapportexport')}>
-                  <span className="material-symbols-outlined text-[16px]">download</span>
-                  Exporter un rapport
+                <button className="btn btn-secondary !justify-start py-3" onClick={() => navigate('/Validation')}>
+                  <span className="material-symbols-outlined text-[20px] mr-3">rule_folder</span> Valider les heures
                 </button>
               )}
-              {isAdmin && (
-                <button className="btn btn-secondary !justify-start"
-                  onClick={() => navigate('/utilisateur')}>
-                  <span className="material-symbols-outlined text-[16px]">person_add</span>
-                  Gérer les utilisateurs
+              {!canManage && (
+                <button className="btn btn-secondary !justify-start py-3" onClick={handleDownload} disabled={downloading}>
+                  <span className="material-symbols-outlined text-[20px] mr-3">download</span> 
+                  {downloading ? 'Génération...' : 'Mon récapitulatif PDF'}
                 </button>
               )}
             </div>
           </div>
+
+          {canManage && (
+            <>
+              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow-sm)] mt-6">
+                <h3 className="dash-section-title mb-4">Heures par Département</h3>
+                <div className="flex flex-col gap-3">
+                  {deptStats.slice(0, 5).map((d, i) => (
+                    <div key={i} className="flex justify-between items-center text-[13px]">
+                      <span className="font-medium text-[#475569]">{d.name}</span>
+                      <span className="font-bold text-[var(--primary)]">{fmt(d.total_etd)} h</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card bg-white border border-[var(--border)] rounded-[var(--r-lg)] p-6 shadow-[var(--shadow-sm)] mt-6">
+                <h3 className="dash-section-title mb-4">Top Filières (ETD)</h3>
+                <div className="flex flex-col gap-3">
+                  {progStats.slice(0, 5).map((p, i) => (
+                    <div key={i} className="flex justify-between items-center text-[13px]">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-[#1e293b]">{p.name}</span>
+                        <span className="text-[10px] text-[#94a3b8] uppercase font-bold">{p.level}</span>
+                      </div>
+                      <span className="font-black text-[#10b981]">{fmt(p.total_etd)} h</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Layout>

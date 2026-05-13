@@ -53,6 +53,7 @@ export const deleteUser    = (id)     => API.delete(`/users/${id}`);
 export const getTeachers       = (params) => API.get('/teachers', { params });
 export const getTeacher        = (id)     => API.get(`/teachers/${id}`);
 export const getMyTeacherProfile = ()     => API.get('/teachers/me');
+export const getMyUEs            = ()     => API.get('/teachers/me/ues');
 export const createTeacher     = (data)   => API.post('/teachers', data);
 export const updateTeacher     = (id, data) => API.put(`/teachers/${id}`, data);
 export const importTeachers    = (file) => {
@@ -92,9 +93,11 @@ export const getDepartments  = ()       => API.get('/academic/departments');
 export const getUEs          = (params) => API.get('/academic/ues', { params });
 export const getSubjects     = (params) => API.get('/academic/subjects', { params });
 export const createSubject   = (data)   => API.post('/academic/subjects', data);
+export const createDepartment = (data)  => API.post('/academic/departments', data);
 
 // ─── Export ─────────────────────────────────────────────
 export const exportTeacherPDF  = (teacherId) => API.get(`/export/pdf/${teacherId}`, { responseType: 'blob' });
+export const exportTeacherExcel = (teacherId) => API.get(`/export/excel/${teacherId}`, { responseType: 'blob' });
 export const exportGlobalPDF   = ()          => API.get('/export/pdf-global', { responseType: 'blob' });
 export const exportExcel       = ()          => API.get('/export/excel', { responseType: 'blob' });
 export const getPaymentStatus  = ()          => API.get('/export/payments');

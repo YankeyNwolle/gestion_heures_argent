@@ -279,3 +279,54 @@ export const exportGlobalPDF = async (req, res) => {
     doc.end();
   } catch(e) { console.error(e); if(!res.headersSent) res.status(500).json({message:"Erreur export PDF global"}); }
 };
+/**
+ * Exporter le récapitulatif individuel d'un enseignant en Excel.
+ */
+export const exportTeacherExcel = async (req, res) => {
+  try {
+    const teacherId = parseInt(req.params.teacherId);
+    const teacher = await getTeacherById(teacherId);
+    if (!teacher) return res.status(404).json({message:"Enseignant non trouvé"});
+
+    const currentYear = await getCurrentAcademicYear();
+    const accounting = await getTeacherAccounting(teacherId, currentYear?.label);
+    const acc = accounting[0] || {};
+
+    const hoursResult = await pool.query(
+      `SELECT h.*, s.name as subject_name FROM hour_entries h
+       LEFT JOIN subjects s ON s.id=h.subject_id
+       WHERE h.teacher_id=$1 AND h.academic_year_id=$2 ORDER BY h.date`,
+      [teacherId, currentYear?.id]
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('Récapitulatif');
+
+    ws.addRow(['RÉCAPITULATIF INDIVIDUEL']);
+    ws.addRow([`${teacher.first_name} ${teacher.last_name}`]);
+    ws.addRow([`Année : ${currentYear?.label || 'N/A'}`]);
+    ws.addRow([]);
+
+    ws.addRow(['Grade', (teacher.grade||'').replace('_',' '), 'Statut', teacher.status]);
+    ws.addRow(['Département', teacher.department_name || '-', 'Quota', `${teacher.contractual_hours} h`]);
+    ws.addRow([]);
+
+    ws.addRow(['BILAN']);
+    ws.addRow(['Total ETD', acc.total_etd || 0]);
+    ws.addRow(['Complémentaires', acc.complementary_etd || 0]);
+    ws.addRow(['Taux Horaire', acc.hourly_rate || 0]);
+    ws.addRow(['MONTANT DÛ', parseInt(acc.amount_due || 0)]);
+    ws.addRow([]);
+
+    ws.addRow(['DÉTAIL DES SÉANCES']);
+    ws.addRow(['Date', 'Matière', 'Type', 'Heures', 'ETD', 'Statut']);
+    hoursResult.rows.forEach(r => {
+      ws.addRow([new Date(r.date).toLocaleDateString('fr-FR'), r.subject_name, r.type, r.hours, r.etd_hours, r.status]);
+    });
+
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',`attachment; filename=recap_${teacher.last_name}.xlsx`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch(e) { console.error(e); res.status(500).json({message:"Erreur export Excel individuel"}); }
+};

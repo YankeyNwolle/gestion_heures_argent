@@ -1,10 +1,10 @@
 import pool from "../config/database.js";
 
-export const createHourEntry = async ({ teacher_id, subject_id, academic_year_id, date, type, hours, etd_hours, room, notes, created_by }) => {
+export const createHourEntry = async ({ teacher_id, subject_id, academic_year_id, date, type, hours, etd_hours, room, notes, created_by, semester }) => {
   const result = await pool.query(
-    `INSERT INTO hour_entries (teacher_id, subject_id, academic_year_id, date, type, hours, etd_hours, room, notes, created_by, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending') RETURNING *`,
-    [teacher_id, subject_id||null, academic_year_id||null, date, type, hours, etd_hours, room||null, notes||null, created_by]
+    `INSERT INTO hour_entries (teacher_id, subject_id, academic_year_id, date, type, hours, etd_hours, room, notes, created_by, status, semester)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11) RETURNING *`,
+    [teacher_id, subject_id||null, academic_year_id||null, date, type, hours, etd_hours, room||null, notes||null, created_by, semester||null]
   );
   return result.rows[0];
 };
@@ -61,25 +61,32 @@ export const getRecentEntriesByCreator = async (userId, limit=10) => {
   return r.rows;
 };
 
-export const getPendingEntries = async (academic_year_id=null) => {
-  let q = `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name, t.grade
-     FROM hour_entries h LEFT JOIN subjects s ON s.id=h.subject_id
-     LEFT JOIN teachers t ON t.id=h.teacher_id LEFT JOIN users u ON u.id=t.user_id WHERE h.status='pending'`;
+export const getPendingEntries = async (academic_year_id = null) => {
+  let q = `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name, t.grade, hr.rate as hourly_rate
+     FROM hour_entries h 
+     LEFT JOIN subjects s ON s.id = h.subject_id
+     LEFT JOIN teachers t ON t.id = h.teacher_id 
+     LEFT JOIN users u ON u.id = t.user_id
+     LEFT JOIN hourly_rates hr ON hr.grade = t.grade AND hr.status = t.status
+     WHERE h.status IN ('pending', 'contested')`;
   const p = [];
-  if(academic_year_id){q+=` AND h.academic_year_id=$1`;p.push(academic_year_id);}
+  if (academic_year_id) { q += ` AND h.academic_year_id = $1`; p.push(academic_year_id); }
   q += ` ORDER BY h.date ASC`;
-  return (await pool.query(q,p)).rows;
+  return (await pool.query(q, p)).rows;
 };
 
 /** Heures en attente ou contestées pour l'enseignant connecté (vue « Mes validations »). */
-export const getTeacherValidationEntries = async (teacherId, academic_year_id=null) => {
-  let q = `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name, t.grade
-     FROM hour_entries h LEFT JOIN subjects s ON s.id=h.subject_id
-     LEFT JOIN teachers t ON t.id=h.teacher_id LEFT JOIN users u ON u.id=t.user_id
-     WHERE h.teacher_id=$1 AND h.status IN ('pending','contested')`;
+export const getTeacherValidationEntries = async (teacherId, academic_year_id = null) => {
+  let q = `SELECT h.*, s.name as subject_name, u.first_name as teacher_first_name, u.last_name as teacher_last_name, t.grade, hr.rate as hourly_rate
+     FROM hour_entries h 
+     LEFT JOIN subjects s ON s.id = h.subject_id
+     LEFT JOIN teachers t ON t.id = h.teacher_id 
+     LEFT JOIN users u ON u.id = t.user_id
+     LEFT JOIN hourly_rates hr ON hr.grade = t.grade AND hr.status = t.status
+     WHERE h.teacher_id = $1 AND h.status IN ('pending','contested')`;
   const p = [teacherId];
   let i = 2;
-  if (academic_year_id) { q += ` AND h.academic_year_id=$${i++}`; p.push(academic_year_id); }
+  if (academic_year_id) { q += ` AND h.academic_year_id = $${i++}`; p.push(academic_year_id); }
   q += ` ORDER BY h.date ASC`;
   return (await pool.query(q, p)).rows;
 };
@@ -110,7 +117,7 @@ export const contestEntry = async (id, reason) => {
 
 export const updateHourEntry = async (id, data) => {
   const f=[],p=[];let i=1;
-  for(const[k,v]of Object.entries(data)){if(v!==undefined&&['subject_id','date','type','hours','etd_hours','room','notes'].includes(k)){f.push(`${k}=$${i++}`);p.push(v);}}
+  for(const[k,v]of Object.entries(data)){if(v!==undefined&&['subject_id','date','type','hours','etd_hours','room','notes','semester'].includes(k)){f.push(`${k}=$${i++}`);p.push(v);}}
   if(!f.length)return null;
   f.push(`updated_at=NOW()`,`status='pending'`);p.push(id);
   const r=await pool.query(`UPDATE hour_entries SET ${f.join(",")} WHERE id=$${i} RETURNING *`,p);

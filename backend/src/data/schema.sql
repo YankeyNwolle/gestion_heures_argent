@@ -1,323 +1,935 @@
--- =============================================================================
--- SCRIPT DE CRÉATION DE LA BASE DE DONNÉES
--- Application: Gestion des Heures des Enseignants du Supérieur
--- SGBD: PostgreSQL 14+
--- =============================================================================
+--
+-- PostgreSQL database dump
+--
 
--- Créer la base si nécessaire (à exécuter en tant que superuser)
--- CREATE DATABASE gestion_heures;
--- \c gestion_heures;
+\restrict b4LfQq6P1ZarjdMtWioAlcmZKcynHoQwc36sZpEfwRZ3LTP7iWwAhXjHixcfrG1
 
-BEGIN;
+-- Dumped from database version 16.13
+-- Dumped by pg_dump version 16.13
 
--- ─── EXTENSIONS ──────────────────────────────────────────────────────────────
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
--- ─── ENUM TYPES ──────────────────────────────────────────────────────────────
-CREATE TYPE user_role AS ENUM ('admin', 'rh', 'enseignant');
-CREATE TYPE teacher_grade AS ENUM ('assistant', 'maitre_assistant', 'professeur');
-CREATE TYPE teacher_status AS ENUM ('permanent', 'vacataire');
-CREATE TYPE hour_type AS ENUM ('CM', 'TD', 'TP');
+--
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
 
--- =============================================================================
--- TABLE: academic_years — Années académiques
--- =============================================================================
-CREATE TABLE academic_years (
-    id          SERIAL PRIMARY KEY,
-    label       VARCHAR(20) NOT NULL,        -- ex: "2025-2026"
-    start_date  DATE NOT NULL,
-    end_date    DATE NOT NULL,
-    is_current  BOOLEAN DEFAULT FALSE,
-    created_at  TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT unique_label UNIQUE (label)
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
+--
+-- Name: hour_type; Type: TYPE; Schema: public; Owner: gestheures
+--
+
+CREATE TYPE public.hour_type AS ENUM (
+    'CM',
+    'TD',
+    'TP'
 );
 
--- =============================================================================
--- TABLE: users — Comptes utilisateurs (Admin, RH, Enseignant)
--- =============================================================================
-CREATE TABLE users (
-    id            SERIAL PRIMARY KEY,
-    email         VARCHAR(150) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    first_name    VARCHAR(100) NOT NULL,
-    last_name     VARCHAR(100) NOT NULL,
-    role          user_role NOT NULL DEFAULT 'enseignant',
-    is_active     BOOLEAN DEFAULT TRUE,
-    last_login    TIMESTAMP,
-    created_at    TIMESTAMP DEFAULT NOW(),
-    updated_at    TIMESTAMP DEFAULT NOW()
+
+ALTER TYPE public.hour_type OWNER TO gestheures;
+
+--
+-- Name: teacher_grade; Type: TYPE; Schema: public; Owner: gestheures
+--
+
+CREATE TYPE public.teacher_grade AS ENUM (
+    'assistant',
+    'maitre_assistant',
+    'professeur'
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
 
--- =============================================================================
--- TABLE: departments — Départements / UFR
--- =============================================================================
-CREATE TABLE departments (
-    id          SERIAL PRIMARY KEY,
-    name        VARCHAR(150) NOT NULL,
-    code        VARCHAR(20) UNIQUE,
-    description TEXT,
-    created_at  TIMESTAMP DEFAULT NOW()
+ALTER TYPE public.teacher_grade OWNER TO gestheures;
+
+--
+-- Name: teacher_rank; Type: TYPE; Schema: public; Owner: gestheures
+--
+
+CREATE TYPE public.teacher_rank AS ENUM (
+    'A',
+    'B'
 );
 
--- =============================================================================
--- TABLE: teachers — Profils enseignants
--- =============================================================================
-CREATE TABLE teachers (
-    id                 SERIAL PRIMARY KEY,
-    user_id            INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    department_id      INTEGER REFERENCES departments(id) ON DELETE SET NULL,
-    grade              teacher_grade NOT NULL,
-    status             teacher_status NOT NULL,
-    speciality         VARCHAR(200),
-    contractual_hours  DECIMAL(6,2) NOT NULL DEFAULT 192.00,  -- h ETD/an pour permanent
-    created_at         TIMESTAMP DEFAULT NOW(),
-    updated_at         TIMESTAMP DEFAULT NOW()
+
+ALTER TYPE public.teacher_rank OWNER TO gestheures;
+
+--
+-- Name: teacher_status; Type: TYPE; Schema: public; Owner: gestheures
+--
+
+CREATE TYPE public.teacher_status AS ENUM (
+    'permanent',
+    'vacataire'
 );
 
-CREATE INDEX idx_teachers_department ON teachers(department_id);
-CREATE INDEX idx_teachers_grade ON teachers(grade);
-CREATE INDEX idx_teachers_status ON teachers(status);
 
--- =============================================================================
--- TABLE: programs — Filières (L1, L2, L3, M1, M2)
--- =============================================================================
-CREATE TABLE programs (
-    id               SERIAL PRIMARY KEY,
-    name             VARCHAR(150) NOT NULL,
-    code             VARCHAR(20),
-    level            VARCHAR(10) NOT NULL,       -- 'L1','L2','L3','M1','M2'
-    department_id    INTEGER REFERENCES departments(id) ON DELETE SET NULL,
-    academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL,
-    created_at       TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT chk_level CHECK (level IN ('L1','L2','L3','M1','M2'))
+ALTER TYPE public.teacher_status OWNER TO gestheures;
+
+--
+-- Name: user_role; Type: TYPE; Schema: public; Owner: gestheures
+--
+
+CREATE TYPE public.user_role AS ENUM (
+    'admin',
+    'rh',
+    'enseignant'
 );
 
-CREATE INDEX idx_programs_department ON programs(department_id);
 
--- =============================================================================
--- TABLE: subjects — Matières avec volumes horaires prévus
--- =============================================================================
-CREATE TABLE subjects (
-    id           SERIAL PRIMARY KEY,
-    name         VARCHAR(200) NOT NULL,
-    code         VARCHAR(30),
-    program_id   INTEGER REFERENCES programs(id) ON DELETE CASCADE,
-    cm_hours     DECIMAL(5,1) DEFAULT 0,   -- Volume prévu CM
-    td_hours     DECIMAL(5,1) DEFAULT 0,   -- Volume prévu TD
-    tp_hours     DECIMAL(5,1) DEFAULT 0,   -- Volume prévu TP
-    coefficient  DECIMAL(3,1) DEFAULT 1.0, -- Coefficient de la matière
-    created_at   TIMESTAMP DEFAULT NOW()
+ALTER TYPE public.user_role OWNER TO gestheures;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: academic_years; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.academic_years (
+    id integer NOT NULL,
+    label character varying(20) NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    is_current boolean DEFAULT false,
+    created_at timestamp without time zone DEFAULT now()
 );
 
-CREATE INDEX idx_subjects_program ON subjects(program_id);
 
--- =============================================================================
--- TABLE: equivalence_rates — Coefficients de conversion en ETD
--- =============================================================================
-CREATE TABLE equivalence_rates (
-    id          SERIAL PRIMARY KEY,
-    type        hour_type NOT NULL UNIQUE,
-    coefficient DECIMAL(4,2) NOT NULL,
-    description VARCHAR(100),
-    updated_at  TIMESTAMP DEFAULT NOW()
+ALTER TABLE public.academic_years OWNER TO gestheures;
+
+--
+-- Name: academic_years_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.academic_years_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.academic_years_id_seq OWNER TO gestheures;
+
+--
+-- Name: academic_years_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.academic_years_id_seq OWNED BY public.academic_years.id;
+
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.audit_logs (
+    id integer NOT NULL,
+    user_id integer,
+    action character varying(10) NOT NULL,
+    table_name character varying(100) NOT NULL,
+    record_id integer,
+    details jsonb,
+    created_at timestamp without time zone DEFAULT now()
 );
 
--- Données par défaut (standard français)
-INSERT INTO equivalence_rates (type, coefficient, description) VALUES
-    ('CM', 1.50, '1h CM = 1.5h ETD'),
-    ('TD', 1.00, '1h TD = 1.0h ETD'),
-    ('TP', 0.75, '1h TP = 0.75h ETD');
 
--- =============================================================================
--- TABLE: hourly_rates — Taux horaires par grade et statut (FCFA/h)
--- =============================================================================
-CREATE TABLE hourly_rates (
-    id         SERIAL PRIMARY KEY,
-    grade      teacher_grade NOT NULL,
-    status     teacher_status NOT NULL,
-    rate       DECIMAL(10,2) NOT NULL,
-    updated_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT unique_grade_status UNIQUE (grade, status)
+ALTER TABLE public.audit_logs OWNER TO gestheures;
+
+--
+-- Name: audit_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.audit_logs_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.audit_logs_id_seq OWNER TO gestheures;
+
+--
+-- Name: audit_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.audit_logs_id_seq OWNED BY public.audit_logs.id;
+
+
+--
+-- Name: departments; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.departments (
+    id integer NOT NULL,
+    name character varying(150) NOT NULL,
+    code character varying(20),
+    description text,
+    created_at timestamp without time zone DEFAULT now()
 );
 
--- Taux par défaut (configurables via l'interface Admin)
-INSERT INTO hourly_rates (grade, status, rate) VALUES
-    ('assistant',        'permanent', 5000.00),
-    ('assistant',        'vacataire', 4000.00),
-    ('maitre_assistant', 'permanent', 6500.00),
-    ('maitre_assistant', 'vacataire', 4000.00),
-    ('professeur',       'permanent', 8000.00),
-    ('professeur',       'vacataire', 4000.00);
 
--- =============================================================================
--- TABLE: hour_entries — Saisies des heures d'enseignement
--- =============================================================================
-CREATE TABLE hour_entries (
-    id               SERIAL PRIMARY KEY,
-    teacher_id       INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
-    subject_id       INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
-    academic_year_id INTEGER REFERENCES academic_years(id) ON DELETE SET NULL,
-    date             DATE NOT NULL,
-    type             hour_type NOT NULL,
-    hours            DECIMAL(5,2) NOT NULL CHECK (hours > 0),
-    etd_hours        DECIMAL(6,2) NOT NULL,         -- Calculé automatiquement
-    room             VARCHAR(60),
-    notes            TEXT,
-    created_by       INTEGER REFERENCES users(id),
-    status           VARCHAR(20) DEFAULT 'pending',  -- pending, validated, contested
-    validated_by     INTEGER REFERENCES users(id),
-    validated_at     TIMESTAMP,
-    contest_reason   TEXT,
-    created_at       TIMESTAMP DEFAULT NOW(),
-    updated_at       TIMESTAMP DEFAULT NOW()
+ALTER TABLE public.departments OWNER TO gestheures;
+
+--
+-- Name: departments_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.departments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.departments_id_seq OWNER TO gestheures;
+
+--
+-- Name: departments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.departments_id_seq OWNED BY public.departments.id;
+
+
+--
+-- Name: equivalence_rates; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.equivalence_rates (
+    id integer NOT NULL,
+    type public.hour_type NOT NULL,
+    coefficient numeric(4,2) NOT NULL,
+    description character varying(100),
+    updated_at timestamp without time zone DEFAULT now()
 );
 
-CREATE INDEX idx_hour_entries_teacher    ON hour_entries(teacher_id);
-CREATE INDEX idx_hour_entries_date       ON hour_entries(date);
-CREATE INDEX idx_hour_entries_type       ON hour_entries(type);
-CREATE INDEX idx_hour_entries_year       ON hour_entries(academic_year_id);
-CREATE INDEX idx_hour_entries_month_year ON hour_entries(EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date));
 
--- =============================================================================
--- TABLE: audit_logs — Journal des modifications
--- =============================================================================
-CREATE TABLE audit_logs (
-    id          SERIAL PRIMARY KEY,
-    user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    action      VARCHAR(10) NOT NULL,      -- POST, PUT, DELETE
-    table_name  VARCHAR(100) NOT NULL,     -- endpoint path
-    record_id   INTEGER,
-    details     JSONB,
-    created_at  TIMESTAMP DEFAULT NOW()
+ALTER TABLE public.equivalence_rates OWNER TO gestheures;
+
+--
+-- Name: equivalence_rates_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.equivalence_rates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.equivalence_rates_id_seq OWNER TO gestheures;
+
+--
+-- Name: equivalence_rates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.equivalence_rates_id_seq OWNED BY public.equivalence_rates.id;
+
+
+--
+-- Name: hour_entries; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.hour_entries (
+    id integer NOT NULL,
+    teacher_id integer NOT NULL,
+    subject_id integer,
+    academic_year_id integer,
+    date date NOT NULL,
+    type public.hour_type NOT NULL,
+    hours numeric(5,2) NOT NULL,
+    etd_hours numeric(6,2) NOT NULL,
+    room character varying(60),
+    notes text,
+    created_by integer,
+    status character varying(20) DEFAULT 'pending'::character varying,
+    validated_by integer,
+    validated_at timestamp without time zone,
+    contest_reason text,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now(),
+    semester character varying(3),
+    CONSTRAINT hour_entries_hours_check CHECK ((hours > (0)::numeric)),
+    CONSTRAINT hour_entries_semester_check CHECK (((semester)::text = ANY ((ARRAY['S1'::character varying, 'S2'::character varying, 'S3'::character varying, 'S4'::character varying, 'S5'::character varying, 'S6'::character varying, 'S7'::character varying, 'S8'::character varying, 'S9'::character varying, 'S10'::character varying])::text[])))
 );
 
-CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_date ON audit_logs(created_at);
 
--- =============================================================================
--- VUES UTILITAIRES
--- =============================================================================
+ALTER TABLE public.hour_entries OWNER TO gestheures;
 
--- Vue: bilan par enseignant et année académique
-CREATE OR REPLACE VIEW v_teacher_balance AS
-SELECT
-    t.id as teacher_id,
+--
+-- Name: hour_entries_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.hour_entries_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.hour_entries_id_seq OWNER TO gestheures;
+
+--
+-- Name: hour_entries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.hour_entries_id_seq OWNED BY public.hour_entries.id;
+
+
+--
+-- Name: hourly_rates; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.hourly_rates (
+    id integer NOT NULL,
+    grade public.teacher_grade NOT NULL,
+    status public.teacher_status NOT NULL,
+    rate numeric(10,2) NOT NULL,
+    updated_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.hourly_rates OWNER TO gestheures;
+
+--
+-- Name: hourly_rates_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.hourly_rates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.hourly_rates_id_seq OWNER TO gestheures;
+
+--
+-- Name: hourly_rates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.hourly_rates_id_seq OWNED BY public.hourly_rates.id;
+
+
+--
+-- Name: subjects; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.subjects (
+    id integer NOT NULL,
+    name character varying(200) NOT NULL,
+    code character varying(30),
+    ue_id integer,
+    cm_hours numeric(5,1) DEFAULT 0,
+    td_hours numeric(5,1) DEFAULT 0,
+    tp_hours numeric(5,1) DEFAULT 0,
+    coefficient numeric(3,1) DEFAULT 1.0,
+    created_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.subjects OWNER TO gestheures;
+
+--
+-- Name: subjects_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.subjects_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.subjects_id_seq OWNER TO gestheures;
+
+--
+-- Name: subjects_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.subjects_id_seq OWNED BY public.subjects.id;
+
+
+--
+-- Name: teachers; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.teachers (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    department_id integer,
+    grade public.teacher_grade NOT NULL,
+    status public.teacher_status NOT NULL,
+    speciality character varying(200),
+    contractual_hours numeric(6,2) DEFAULT 192.00 NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now(),
+    rank character varying(100)
+);
+
+
+ALTER TABLE public.teachers OWNER TO gestheures;
+
+--
+-- Name: teachers_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.teachers_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.teachers_id_seq OWNER TO gestheures;
+
+--
+-- Name: teachers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.teachers_id_seq OWNED BY public.teachers.id;
+
+
+--
+-- Name: ues; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.ues (
+    id integer NOT NULL,
+    name character varying(150) NOT NULL,
+    code character varying(20),
+    level character varying(10) NOT NULL,
+    department_id integer,
+    academic_year_id integer,
+    created_at timestamp without time zone DEFAULT now(),
+    CONSTRAINT chk_level CHECK (((level)::text = ANY (ARRAY[('L1'::character varying)::text, ('L2'::character varying)::text, ('L3'::character varying)::text, ('M1'::character varying)::text, ('M2'::character varying)::text])))
+);
+
+
+ALTER TABLE public.ues OWNER TO gestheures;
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: gestheures
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    email character varying(150) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    first_name character varying(100) NOT NULL,
+    last_name character varying(100) NOT NULL,
+    role public.user_role DEFAULT 'enseignant'::public.user_role NOT NULL,
+    is_active boolean DEFAULT true,
+    last_login timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.users OWNER TO gestheures;
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: gestheures
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.users_id_seq OWNER TO gestheures;
+
+--
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: gestheures
+--
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
+
+--
+-- Name: v_teacher_balance; Type: VIEW; Schema: public; Owner: gestheures
+--
+
+CREATE VIEW public.v_teacher_balance AS
+ SELECT t.id AS teacher_id,
     u.first_name,
     u.last_name,
     t.grade,
     t.status,
     t.contractual_hours,
-    d.name as department_name,
-    ay.label as academic_year,
-    SUM(CASE WHEN h.type='CM' THEN h.hours ELSE 0 END) as cm_raw,
-    SUM(CASE WHEN h.type='TD' THEN h.hours ELSE 0 END) as td_raw,
-    SUM(CASE WHEN h.type='TP' THEN h.hours ELSE 0 END) as tp_raw,
-    SUM(h.etd_hours) as total_etd,
-    GREATEST(0, SUM(h.etd_hours) - t.contractual_hours) as complementary_etd,
-    LEAST(SUM(h.etd_hours), t.contractual_hours) as normal_etd
-FROM teachers t
-JOIN users u ON u.id = t.user_id
-LEFT JOIN departments d ON d.id = t.department_id
-LEFT JOIN hour_entries h ON h.teacher_id = t.id
-LEFT JOIN academic_years ay ON ay.id = h.academic_year_id
-GROUP BY t.id, u.first_name, u.last_name, t.grade, t.status,
-         t.contractual_hours, d.name, ay.label;
+    d.name AS department_name,
+    ay.label AS academic_year,
+    sum(
+        CASE
+            WHEN (h.type = 'CM'::public.hour_type) THEN h.hours
+            ELSE (0)::numeric
+        END) AS cm_raw,
+    sum(
+        CASE
+            WHEN (h.type = 'TD'::public.hour_type) THEN h.hours
+            ELSE (0)::numeric
+        END) AS td_raw,
+    sum(
+        CASE
+            WHEN (h.type = 'TP'::public.hour_type) THEN h.hours
+            ELSE (0)::numeric
+        END) AS tp_raw,
+    sum(h.etd_hours) AS total_etd,
+    GREATEST((0)::numeric, (sum(h.etd_hours) - t.contractual_hours)) AS complementary_etd,
+    LEAST(sum(h.etd_hours), t.contractual_hours) AS normal_etd
+   FROM ((((public.teachers t
+     JOIN public.users u ON ((u.id = t.user_id)))
+     LEFT JOIN public.departments d ON ((d.id = t.department_id)))
+     LEFT JOIN public.hour_entries h ON ((h.teacher_id = t.id)))
+     LEFT JOIN public.academic_years ay ON ((ay.id = h.academic_year_id)))
+  GROUP BY t.id, u.first_name, u.last_name, t.grade, t.status, t.contractual_hours, d.name, ay.label;
 
--- Vue: état comptable (montants dus)
-CREATE OR REPLACE VIEW v_accounting AS
-SELECT
-    b.*,
-    hr.rate as hourly_rate,
-    ROUND(b.complementary_etd * hr.rate, 0) as amount_due
-FROM v_teacher_balance b
-JOIN hourly_rates hr ON hr.grade = b.grade AND hr.status = b.status;
 
--- =============================================================================
--- DONNÉES DE DÉMONSTRATION (SEED)
--- =============================================================================
+ALTER VIEW public.v_teacher_balance OWNER TO gestheures;
 
--- Année académique
-INSERT INTO academic_years (label, start_date, end_date, is_current) VALUES
-    ('2024-2025', '2024-09-01', '2025-07-31', FALSE),
-    ('2025-2026', '2025-09-01', '2026-07-31', TRUE);
+--
+-- Name: v_accounting; Type: VIEW; Schema: public; Owner: gestheures
+--
 
--- Départements
-INSERT INTO departments (name, code, description) VALUES
-    ('Informatique', 'INFO', 'Département des Sciences et Technologies de l''Information'),
-    ('Mathématiques', 'MATH', 'Département de Mathématiques Appliquées'),
-    ('Physique', 'PHYS', 'Département de Physique Fondamentale');
+CREATE VIEW public.v_accounting AS
+ SELECT b.teacher_id,
+    b.first_name,
+    b.last_name,
+    b.grade,
+    b.status,
+    b.contractual_hours,
+    b.department_name,
+    b.academic_year,
+    b.cm_raw,
+    b.td_raw,
+    b.tp_raw,
+    b.total_etd,
+    b.complementary_etd,
+    b.normal_etd,
+    hr.rate AS hourly_rate,
+    round((b.complementary_etd * hr.rate), 0) AS amount_due
+   FROM (public.v_teacher_balance b
+     JOIN public.hourly_rates hr ON (((hr.grade = b.grade) AND (hr.status = b.status))));
 
--- Filières
-INSERT INTO programs (name, code, level, department_id, academic_year_id) VALUES
-    ('Licence Informatique', 'L-INFO-L1', 'L1', 1, 2),
-    ('Licence Informatique', 'L-INFO-L2', 'L2', 1, 2),
-    ('Licence Informatique', 'L-INFO-L3', 'L3', 1, 2),
-    ('Master Informatique', 'M-INFO-M1', 'M1', 1, 2),
-    ('Master Informatique', 'M-INFO-M2', 'M2', 1, 2),
-    ('Licence Mathématiques', 'L-MATH-L1', 'L1', 2, 2);
 
--- Matières
-INSERT INTO subjects (name, code, program_id, cm_hours, td_hours, tp_hours, coefficient) VALUES
-    ('Algorithmique et Structures de Données', 'ASD-L1', 1, 30, 20, 10, 3),
-    ('Programmation Orientée Objet', 'POO-L2', 2, 25, 20, 15, 3),
-    ('Bases de Données', 'BDD-L2', 2, 30, 15, 15, 3),
-    ('Réseaux Informatiques', 'RES-L3', 3, 30, 20, 10, 3),
-    ('Génie Logiciel', 'GL-M1', 4, 35, 15, 10, 4),
-    ('Intelligence Artificielle', 'IA-M2', 5, 40, 20, 0, 4),
-    ('Analyse Mathématique', 'AM-L1', 6, 40, 25, 0, 4);
+ALTER VIEW public.v_accounting OWNER TO gestheures;
 
--- Comptes utilisateurs (mots de passe: "Admin1234!" hashés avec bcrypt rounds=12)
--- IMPORTANT: Remplacer ces hashes par de vrais hashes en production via npm run seed
-INSERT INTO users (email, password_hash, first_name, last_name, role) VALUES
-    ('admin@universite.ci',
-     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
-     'Système', 'Administrateur', 'admin'),
-    ('rh@universite.ci',
-     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
-     'Marie', 'Konan', 'rh'),
-    ('jean.dupont@universite.ci',
-     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
-     'Jean', 'Dupont', 'enseignant'),
-    ('fatou.diallo@universite.ci',
-     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
-     'Fatou', 'Diallo', 'enseignant'),
-    ('kouame.assi@universite.ci',
-     '$2b$12$Fy2w3u5L73TrUT37enWxJezTs27qwIFrvEd7bpre4Q/SkXcQLWUlu',
-     'Kouamé', 'Assi', 'enseignant');
+--
+-- Name: academic_years id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
 
--- Profils enseignants
-INSERT INTO teachers (user_id, department_id, grade, status, speciality, contractual_hours) VALUES
-    (3, 1, 'maitre_assistant', 'permanent', 'Génie Logiciel & BDD', 192.00),
-    (4, 1, 'assistant',        'permanent', 'Intelligence Artificielle', 192.00),
-    (5, 2, 'professeur',       'permanent', 'Algèbre & Analyse', 192.00);
+ALTER TABLE ONLY public.academic_years ALTER COLUMN id SET DEFAULT nextval('public.academic_years_id_seq'::regclass);
 
--- Saisies d'heures exemple (année 2025-2026, id=2)
-INSERT INTO hour_entries (teacher_id, subject_id, academic_year_id, date, type, hours, etd_hours, room, created_by) VALUES
-    -- Jean Dupont (teacher_id=1) - dépasse son service
-    (1, 1, 2, '2025-10-05', 'CM', 4.0, 6.00, 'Amphi A', 1),
-    (1, 1, 2, '2025-10-12', 'TD', 3.0, 3.00, 'Salle 12', 1),
-    (1, 2, 2, '2025-10-19', 'CM', 3.0, 4.50, 'Amphi A', 1),
-    (1, 3, 2, '2025-11-02', 'CM', 4.0, 6.00, 'Amphi B', 1),
-    (1, 3, 2, '2025-11-09', 'TD', 4.0, 4.00, 'Salle 8',  1),
-    (1, 5, 2, '2025-11-16', 'CM', 5.0, 7.50, 'Amphi A', 1),
-    (1, 5, 2, '2025-11-23', 'TD', 4.0, 4.00, 'Salle 10', 1),
-    (1, 6, 2, '2025-12-07', 'CM', 6.0, 9.00, 'Amphi B', 1),
-    -- Fatou Diallo (teacher_id=2)
-    (2, 2, 2, '2025-10-06', 'CM', 3.0, 4.50, 'Amphi C', 1),
-    (2, 2, 2, '2025-10-13', 'TP', 2.0, 1.50, 'Labo 1',  1),
-    (2, 6, 2, '2025-11-03', 'CM', 4.0, 6.00, 'Amphi C', 1),
-    -- Kouamé Assi (teacher_id=3)
-    (3, 7, 2, '2025-10-07', 'CM', 5.0, 7.50, 'Amphi D', 1),
-    (3, 7, 2, '2025-10-14', 'TD', 3.0, 3.00, 'Salle 3',  1),
-    (3, 7, 2, '2025-11-04', 'CM', 4.0, 6.00, 'Amphi D', 1);
 
-COMMIT;
+--
+-- Name: audit_logs id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
 
--- =============================================================================
--- Vérification post-installation
--- =============================================================================
--- SELECT tablename FROM pg_tables WHERE schemaname = 'public';
--- SELECT * FROM v_accounting;
+ALTER TABLE ONLY public.audit_logs ALTER COLUMN id SET DEFAULT nextval('public.audit_logs_id_seq'::regclass);
+
+
+--
+-- Name: departments id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.departments ALTER COLUMN id SET DEFAULT nextval('public.departments_id_seq'::regclass);
+
+
+--
+-- Name: equivalence_rates id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.equivalence_rates ALTER COLUMN id SET DEFAULT nextval('public.equivalence_rates_id_seq'::regclass);
+
+
+--
+-- Name: hour_entries id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries ALTER COLUMN id SET DEFAULT nextval('public.hour_entries_id_seq'::regclass);
+
+
+--
+-- Name: hourly_rates id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hourly_rates ALTER COLUMN id SET DEFAULT nextval('public.hourly_rates_id_seq'::regclass);
+
+
+--
+-- Name: subjects id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.subjects ALTER COLUMN id SET DEFAULT nextval('public.subjects_id_seq'::regclass);
+
+
+--
+-- Name: teachers id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.teachers ALTER COLUMN id SET DEFAULT nextval('public.teachers_id_seq'::regclass);
+
+
+--
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+
+
+--
+-- Name: academic_years academic_years_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.academic_years
+    ADD CONSTRAINT academic_years_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: departments departments_code_key; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.departments
+    ADD CONSTRAINT departments_code_key UNIQUE (code);
+
+
+--
+-- Name: departments departments_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.departments
+    ADD CONSTRAINT departments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: equivalence_rates equivalence_rates_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.equivalence_rates
+    ADD CONSTRAINT equivalence_rates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: equivalence_rates equivalence_rates_type_key; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.equivalence_rates
+    ADD CONSTRAINT equivalence_rates_type_key UNIQUE (type);
+
+
+--
+-- Name: hour_entries hour_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hourly_rates hourly_rates_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hourly_rates
+    ADD CONSTRAINT hourly_rates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ues programs_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.ues
+    ADD CONSTRAINT programs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: subjects subjects_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.subjects
+    ADD CONSTRAINT subjects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: teachers teachers_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.teachers
+    ADD CONSTRAINT teachers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: teachers teachers_user_id_key; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.teachers
+    ADD CONSTRAINT teachers_user_id_key UNIQUE (user_id);
+
+
+--
+-- Name: hourly_rates unique_grade_status; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hourly_rates
+    ADD CONSTRAINT unique_grade_status UNIQUE (grade, status);
+
+
+--
+-- Name: academic_years unique_label; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.academic_years
+    ADD CONSTRAINT unique_label UNIQUE (label);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_audit_logs_date; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_audit_logs_date ON public.audit_logs USING btree (created_at);
+
+
+--
+-- Name: idx_audit_logs_user; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_audit_logs_user ON public.audit_logs USING btree (user_id);
+
+
+--
+-- Name: idx_hour_entries_date; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_hour_entries_date ON public.hour_entries USING btree (date);
+
+
+--
+-- Name: idx_hour_entries_month_year; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_hour_entries_month_year ON public.hour_entries USING btree (EXTRACT(year FROM date), EXTRACT(month FROM date));
+
+
+--
+-- Name: idx_hour_entries_teacher; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_hour_entries_teacher ON public.hour_entries USING btree (teacher_id);
+
+
+--
+-- Name: idx_hour_entries_type; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_hour_entries_type ON public.hour_entries USING btree (type);
+
+
+--
+-- Name: idx_hour_entries_year; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_hour_entries_year ON public.hour_entries USING btree (academic_year_id);
+
+
+--
+-- Name: idx_programs_department; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_programs_department ON public.ues USING btree (department_id);
+
+
+--
+-- Name: idx_subjects_program; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_subjects_program ON public.subjects USING btree (ue_id);
+
+
+--
+-- Name: idx_teachers_department; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_teachers_department ON public.teachers USING btree (department_id);
+
+
+--
+-- Name: idx_teachers_grade; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_teachers_grade ON public.teachers USING btree (grade);
+
+
+--
+-- Name: idx_teachers_status; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_teachers_status ON public.teachers USING btree (status);
+
+
+--
+-- Name: idx_users_email; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_users_email ON public.users USING btree (email);
+
+
+--
+-- Name: idx_users_role; Type: INDEX; Schema: public; Owner: gestheures
+--
+
+CREATE INDEX idx_users_role ON public.users USING btree (role);
+
+
+--
+-- Name: audit_logs audit_logs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hour_entries hour_entries_academic_year_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hour_entries hour_entries_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: hour_entries hour_entries_subject_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hour_entries hour_entries_teacher_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hour_entries hour_entries_validated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.hour_entries
+    ADD CONSTRAINT hour_entries_validated_by_fkey FOREIGN KEY (validated_by) REFERENCES public.users(id);
+
+
+--
+-- Name: ues programs_academic_year_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.ues
+    ADD CONSTRAINT programs_academic_year_id_fkey FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE SET NULL;
+
+
+--
+-- Name: ues programs_department_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.ues
+    ADD CONSTRAINT programs_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
+
+
+--
+-- Name: subjects subjects_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.subjects
+    ADD CONSTRAINT subjects_program_id_fkey FOREIGN KEY (ue_id) REFERENCES public.ues(id) ON DELETE CASCADE;
+
+
+--
+-- Name: teachers teachers_department_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.teachers
+    ADD CONSTRAINT teachers_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
+
+
+--
+-- Name: teachers teachers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: gestheures
+--
+
+ALTER TABLE ONLY public.teachers
+    ADD CONSTRAINT teachers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict b4LfQq6P1ZarjdMtWioAlcmZKcynHoQwc36sZpEfwRZ3LTP7iWwAhXjHixcfrG1
+

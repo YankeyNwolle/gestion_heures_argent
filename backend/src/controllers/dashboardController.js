@@ -40,7 +40,12 @@ export const getStats = async (req, res) => {
     stats.totalEtd = rows.reduce((s,r)=>s+parseFloat(r.total_etd||0),0);
     stats.complementaryHours = rows.reduce((s,r)=>s+parseFloat(r.complementary_etd||0),0);
     stats.amountDue = rows.reduce((s,r)=>s+parseFloat(r.amount_due||0),0);
+    stats.potentialAmount = rows.reduce((s,r)=>s+parseFloat(r.potential_amount||0),0);
     stats.teachersOverLimit = rows.filter(r=>parseFloat(r.complementary_etd||0)>0).length;
+
+    // Récupérer le nombre de contestations en attente
+    const contestRes = await pool.query(`SELECT COUNT(*) as c FROM hour_entries WHERE status='contested' AND academic_year_id=$1`, [currentYear.id]);
+    stats.contestedCount = parseInt(contestRes.rows[0].c);
 
     const teacherCountResult = await pool.query(`SELECT COUNT(*) as c FROM teachers t JOIN users u ON u.id=t.user_id WHERE u.is_active=TRUE`);
     stats.teacherCount = parseInt(teacherCountResult.rows[0].c);
@@ -78,7 +83,7 @@ export const getTeacherSummary = async (req, res) => {
   try {
     const currentYear = await getCurrentAcademicYear();
     if (!currentYear) return res.json({teachers:[]});
-    const result = await pool.query(`SELECT * FROM v_teacher_balance WHERE academic_year=$1 ORDER BY last_name`,[currentYear.label]);
+    const result = await pool.query(`SELECT * FROM v_accounting WHERE academic_year=$1 ORDER BY last_name`,[currentYear.label]);
     res.json({teachers: result.rows, academicYear: currentYear.label});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };
@@ -109,7 +114,7 @@ export const getProgramStats = async (req, res) => {
       `SELECT p.name, p.level, SUM(h.etd_hours) as total_etd
        FROM hour_entries h
        JOIN subjects s ON s.id = h.subject_id
-       JOIN programs p ON p.id = s.program_id
+       JOIN ues p ON p.id = s.ue_id
        WHERE h.academic_year_id = $1
        GROUP BY p.name, p.level
        ORDER BY total_etd DESC`,

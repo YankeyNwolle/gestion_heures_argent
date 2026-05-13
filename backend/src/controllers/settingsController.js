@@ -1,4 +1,5 @@
 import * as SettingsModel from "../models/settingsModel.js";
+import pool from "../config/database.js";
 
 export const getEquivalences = async (req, res) => {
   try { res.json({rates: await SettingsModel.getEquivalenceRates()}); }
@@ -11,6 +12,12 @@ export const updateEquivalence = async (req, res) => {
     if (!type||coefficient===undefined) return res.status(400).json({message:"Type et coefficient requis"});
     const rate = await SettingsModel.updateEquivalenceRate(type, parseFloat(coefficient));
     if (!rate) return res.status(404).json({message:"Type non trouvé"});
+
+    // Audit Log
+    pool.query(`INSERT INTO audit_logs(user_id,action,table_name,record_id,details)VALUES($1,'PUT','/api/settings/equivalences',$2,$3)`,
+      [req.user.id, rate.id, JSON.stringify({type, old: rate.coefficient, new: parseFloat(coefficient)})]
+    ).catch(()=>{});
+
     res.json({message:"Coefficient mis à jour",rate});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };
@@ -26,6 +33,12 @@ export const updateHourlyRate = async (req, res) => {
     if (!grade||!status||rate===undefined) return res.status(400).json({message:"Grade, statut et taux requis"});
     const updated = await SettingsModel.updateHourlyRate(grade, status, parseFloat(rate));
     if (!updated) return res.status(404).json({message:"Combinaison grade/statut non trouvée"});
+
+    // Audit Log
+    pool.query(`INSERT INTO audit_logs(user_id,action,table_name,record_id,details)VALUES($1,'PUT','/api/settings/rates',$2,$3)`,
+      [req.user.id, updated.id, JSON.stringify({grade, status, rate: parseFloat(rate)})]
+    ).catch(()=>{});
+
     res.json({message:"Taux mis à jour",rate: updated});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };

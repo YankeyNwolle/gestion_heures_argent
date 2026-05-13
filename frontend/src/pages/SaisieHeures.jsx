@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import {
-  createHour, getRecentHours,
+  createHour, updateHour, getRecentHours,
   getSubjects, getTeachers, getMyTeacherProfile,
   getCurrentYear,
 } from '../api/auth';
@@ -31,15 +32,20 @@ export default function SaisieHeures() {
   /* Form state */
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState({
-    date:        today,
+    date:        '',
     subject_id:  '',
     teacher_id:  '',
     type:        'CM',
     hours:       2,
     room:        '',
     notes:       '',
+    semester:    '',
   });
   const [saving, setSaving] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   /* Data */
   const [subjects,    setSubjects]   = useState([]);
@@ -48,6 +54,38 @@ export default function SaisieHeures() {
   const [myTeacher,   setMyTeacher]  = useState(null);
   const [currentYear, setYear]       = useState(null);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Check for edit state from navigation
+  useEffect(() => {
+    if (location.state?.editSession) {
+      const s = location.state.editSession;
+      try {
+        let formattedDate = today;
+        if (s.date) {
+          const d = new Date(s.date);
+          if (!isNaN(d.getTime())) {
+            formattedDate = d.toISOString().split('T')[0];
+          }
+        }
+        
+        setForm({
+          date: formattedDate,
+          subject_id: s.subject_id?.toString() || '',
+          teacher_id: s.teacher_id?.toString() || '',
+          type: s.type || 'CM',
+          hours: s.hours || 0,
+          room: s.room || '',
+          notes: s.notes || '',
+          semester: s.semester?.toString() || '',
+        });
+        setEditMode(true);
+        setEditingId(s.id);
+        toast.info("Mode édition : séance du " + fmtDate(s.date));
+      } catch (err) {
+        console.error("Error setting edit session:", err);
+      }
+    }
+  }, [location.state, today]);
 
   function set(k, v) { setForm(p => ({ ...p, [k]: v })); }
 
@@ -114,11 +152,19 @@ export default function SaisieHeures() {
         etd_hours:        etd,
         room:             form.room || null,
         notes:            form.notes || null,
+        semester: form.semester || null,
       };
-      await createHour(payload);
-      toast.success('Séance enregistrée avec succès !');
+      if (editMode) {
+        await updateHour(editingId, { ...payload, status: 'pending' }); // Re-passer en pending après modif
+        toast.success('Séance mise à jour !');
+      } else {
+        await createHour(payload);
+        toast.success('Séance enregistrée avec succès !');
+      }
       // Reset form
-      setForm({ date: today, subject_id: '', teacher_id: canManage ? '' : form.teacher_id, type: 'CM', hours: 2, room: '', notes: '' });
+      setForm({ date: '', subject_id: '', teacher_id: canManage ? '' : form.teacher_id, type: 'CM', hours: 2, room: '', notes: '', semester: '' });
+      setEditMode(false);
+      setEditingId(null);
       // Refresh recent
       const recentRes = await getRecentHours(10);
       const recentList = recentRes.data?.hours ?? recentRes.data?.entries ?? recentRes.data;
@@ -139,10 +185,17 @@ export default function SaisieHeures() {
             <div className="sh-form-header">
               <span className="material-symbols-outlined sh-form-header-icon">edit_note</span>
               <div>
-                <h3 style={{ fontSize: 15, fontWeight: 700 }}>Nouvelle séance</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>{editMode ? 'Modifier la séance' : 'Nouvelle séance'}</h3>
                 <p style={{ fontSize: 12 }}>Année académique : {currentYear?.label || '—'}</p>
               </div>
             </div>
+
+            {editMode && location.state?.editSession?.contest_reason && (
+              <div style={{ margin: '0 24px 20px', padding: '12px', background: '#fff1f2', borderLeft: '4px solid #ef4444', borderRadius: '4px' }}>
+                <p style={{ fontSize: '11px', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase', marginBottom: '4px' }}>Motif de contestation :</p>
+                <p style={{ fontSize: '13px', color: '#7f1d1d', fontStyle: 'italic' }}>"{location.state.editSession.contest_reason}"</p>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit}>
               {/* Enseignant */}
@@ -163,8 +216,8 @@ export default function SaisieHeures() {
               <div className="form-grid-2 sh-form-field">
                 <div className="form-field">
                   <label className="form-label">Date de la séance *</label>
-                  <input className="form-input" type="date" value={form.date}
-                    onChange={e => set('date', e.target.value)} max={today} />
+                    <input className="form-input" type="date" value={form.date}
+                        onChange={e => set('date', e.target.value)} />
                 </div>
                 <div className="form-field">
                   <label className="form-label">Matière (UE) *</label>
@@ -172,11 +225,38 @@ export default function SaisieHeures() {
                     onChange={e => set('subject_id', e.target.value)}>
                     <option value="">— Sélectionner —</option>
                     {subjects.map(s => (
-                      <option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''}</option>
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.code ? `(${s.code})` : ''} — {s.level || 'L1'}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {/* Semestre (Toujours visible pour être vu) */}
+              <div className="form-field sh-form-field">
+                <label className="form-label">Semestre *</label>
+                <select className="form-select" value={form.semester} 
+                  onChange={e => set('semester', e.target.value)}
+                  disabled={!form.subject_id}
+                >
+                  <option value="">— {form.subject_id ? 'Sélectionner' : 'Choisir une matière d\'abord'} —</option>
+                  {(() => {
+                    if (!form.subject_id) return null;
+                    const subj = subjects.find(s => s.id.toString() === form.subject_id.toString());
+                    const level = subj?.level || 'L1';
+                    const semesters = (level === 'L1') ? [1, 2] : 
+                                    (level === 'L2') ? [3, 4] : 
+                                    (level === 'L3') ? [5, 6] : 
+                                    (level === 'M1') ? [7, 8] : 
+                                    (level === 'M2') ? [9, 10] : [1, 2];
+                    return semesters.map(s => (
+                      <option key={s} value={`S${s}`}>Semestre {s} ({level})</option>
+                    ));
+                  })()}
+                </select>
+              </div>
+
 
               {/* Type + Durée + Salle */}
               <div className="form-grid-3 sh-form-field">
@@ -204,24 +284,31 @@ export default function SaisieHeures() {
                 </div>
               </div>
 
-              {/* Notes */}
+              {/* Notes / Réponse RH */}
               <div className="form-field sh-form-field">
-                <label className="form-label">Commentaires (optionnel)</label>
+                <label className="form-label" style={editMode ? { color: 'var(--primary)', fontWeight: '800' } : {}}>
+                   {editMode ? 'Réponse à la contestation (sera visible par l\'enseignant)' : 'Commentaires (optionnel)'}
+                </label>
                 <textarea className="form-textarea" rows={2}
-                  placeholder="Contenu de la séance, observations…"
+                  style={editMode ? { border: '2px solid #e0e7ff', background: '#f8faff' } : {}}
+                  placeholder={editMode ? "Ex: Corrigé, j'ai bien mis 4h au lieu de 2h..." : "Contenu de la séance, observations…"}
                   value={form.notes} onChange={e => set('notes', e.target.value)} />
               </div>
 
               {/* Submit */}
               <div className="sh-form-actions">
                 <button type="button" className="btn btn-ghost"
-                  onClick={() => setForm({ date: today, subject_id: '', teacher_id: '', type: 'CM', hours: 2, room: '', notes: '' })}>
-                  Réinitialiser
+                  onClick={() => {
+                    setForm({ date: '', subject_id: '', teacher_id: '', type: 'CM', hours: 2, room: '', notes: '', semester: '' });
+                    setEditMode(false);
+                    setEditingId(null);
+                  }}>
+                  {editMode ? 'Annuler' : 'Réinitialiser'}
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
+                <button type="submit" className="btn btn-primary" disabled={saving} style={editMode ? { background: '#6366f1' } : {}}>
                   {saving
-                    ? <><span className="material-symbols-outlined spin" style={{ fontSize: 16 }}>refresh</span> Enregistrement…</>
-                    : <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>save</span> Enregistrer la séance</>
+                    ? <><span className="material-symbols-outlined spin" style={{ fontSize: 16 }}>refresh</span> Traitement…</>
+                    : <><span className="material-symbols-outlined" style={{ fontSize: 16 }}>{editMode ? 'check_circle' : 'save'}</span> {editMode ? 'Enregistrer les modifications' : 'Enregistrer la séance'}</>
                   }
                 </button>
               </div>
@@ -311,6 +398,7 @@ export default function SaisieHeures() {
                 <th>Matière</th>
                 <th>Type</th>
                 <th style={{ textAlign: 'right' }}>Durée</th>
+                <th>Sem.</th>
                 <th style={{ textAlign: 'right' }}>ETD</th>
                 <th>Statut</th>
               </tr>
@@ -324,7 +412,7 @@ export default function SaisieHeures() {
                 ))
               ) : recentHours.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 7 : 6}>
+                  <td colSpan={canManage ? 8 : 7}>
                     <div className="empty-state" style={{ padding: '24px 0' }}>
                       <span className="material-symbols-outlined">schedule</span>
                       <h4>Aucune saisie récente</h4>
@@ -349,6 +437,7 @@ export default function SaisieHeures() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right', fontSize: 13 }}>{h.hours} h</td>
+                      <td style={{ textAlign: 'center', fontSize: 12, fontWeight: 700 }}>{h.semester ? `S${h.semester}` : '—'}</td>
                       <td style={{ textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{h.etd_hours} h</td>
                       <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     </tr>

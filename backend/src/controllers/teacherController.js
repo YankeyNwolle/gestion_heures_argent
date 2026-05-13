@@ -33,7 +33,11 @@ export const getMyProfile = async (req, res) => {
 
 export const createTeacher = async (req, res) => {
   try {
-    const teacher = await TeacherModel.createTeacher(req.body);
+    const data = { ...req.body };
+    if (data.status === 'vacataire') {
+      data.contractual_hours = 0;
+    }
+    const teacher = await TeacherModel.createTeacher(data);
     res.status(201).json({message:"Enseignant créé",teacher});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur",detail:e.message}); }
 };
@@ -66,6 +70,15 @@ export const getTeacherCount = async (req, res) => {
   try {
     const count = await TeacherModel.getTeacherCount();
     res.json({count});
+  } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
+};
+
+export const getMyUEs = async (req, res) => {
+  try {
+    const teacher = await TeacherModel.getTeacherByUserId(req.user.id);
+    if (!teacher) return res.status(404).json({message:"Profil enseignant non trouvé"});
+    const ues = await TeacherModel.getTeacherUEs(teacher.id);
+    res.json({ues});
   } catch(e) { console.error(e); res.status(500).json({message:"Erreur serveur"}); }
 };
 export const importTeachers = async (req, res) => {
@@ -113,10 +126,14 @@ export const importTeachers = async (req, res) => {
         const deptRes = await pool.query("SELECT id FROM departments WHERE code = $1", [t.department_code]);
         const deptId = deptRes.rows[0]?.id || null;
 
-        // 3. Determine contractual hours based on rank
+        // 3. Determine contractual hours based on status and rank
         let hours = 192;
-        if (t.rank === 'B') hours = 240;
-        if (t.rank === 'A') hours = 150;
+        if (t.status === 'vacataire') {
+          hours = 0; // Les vacataires n'ont pas d'heures contractuelles (tout est complémentaire)
+        } else {
+          if (t.rank === 'B') hours = 240;
+          if (t.rank === 'A') hours = 150;
+        }
 
         // 4. Create or Update teacher profile
         const existingTeacher = await TeacherModel.getTeacherByUserId(user.id);

@@ -10,7 +10,7 @@ import pool from "../config/database.js";
  */
 export const createHour = async (req, res) => {
   try {
-    const { teacher_id, subject_id, date, type, hours, room, notes, academic_year_id } = req.body;
+    const { teacher_id, subject_id, date, type, hours, room, notes, academic_year_id, semester } = req.body;
     if (!type || !hours || !date) return res.status(400).json({message:"Type, heures et date sont requis"});
     if (!['CM','TD','TP'].includes(type)) return res.status(400).json({message:"Type invalide (CM, TD, TP)"});
     if (parseFloat(hours) <= 0) return res.status(400).json({message:"Les heures doivent être > 0"});
@@ -38,7 +38,7 @@ export const createHour = async (req, res) => {
     const entry = await HourModel.createHourEntry({
       teacher_id: tid, subject_id, academic_year_id: yearId,
       date, type, hours: parseFloat(hours), etd_hours,
-      room, notes, created_by: req.user.id
+      room, notes, created_by: req.user.id, semester: semester ? parseInt(semester) : null
     });
 
     // Audit log

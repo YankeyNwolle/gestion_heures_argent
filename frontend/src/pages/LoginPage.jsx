@@ -333,20 +333,43 @@ function LoginForm() {
 /* ─── Main page ──────────────────────────────────────────── */
 export default function LoginPage() {
   return (
-    <div className="auth-page">
-      <div className="auth-blob auth-blob-top" />
-      <div className="auth-blob auth-blob-bottom" />
-
-      <div className="auth-card">
-        <AuthHeader />
-        <div className="auth-form-body">
-          <LoginForm />
+    <div className="auth-split-container">
+      {/* Left side: Hero Image */}
+      <div className="auth-hero-side">
+        <div className="auth-hero-overlay">
+          <div className="auth-hero-content">
+            <h2 className="hero-title">Plateforme GestHeures</h2>
+            <p className="hero-text">
+              Gérez efficacement les heures d'enseignement, automatisez les calculs financiers 
+              et assurez une transparence totale entre l'administration et le corps enseignant.
+            </p>
+            <div className="hero-badges">
+              <span className="hero-badge">Validation RH</span>
+              <span className="hero-badge">Calcul ETD</span>
+              <span className="hero-badge">Paiement Sécurisé</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <p className="auth-footer-note">
-        © {new Date().getFullYear()} GestionHeures — Enseignement Supérieur
-      </p>
+      {/* Right side: Login Form */}
+      <div className="auth-form-side">
+        <div className="auth-form-container">
+          <div className="auth-header-minimal">
+            <div className="auth-logo-circle">🎓</div>
+            <h1 className="auth-title-large">Bienvenue</h1>
+            <p className="auth-subtitle-small">Connectez-vous pour accéder à votre espace</p>
+          </div>
+          
+          <div className="auth-form-wrapper">
+            <LoginForm />
+          </div>
+
+          <div className="auth-footer-minimal">
+            <p>© {new Date().getFullYear()} GestHeures — Université & Grandes Écoles</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
